@@ -1,4 +1,6 @@
 # User-defined routing IPC library
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/raitosyo/rteipc/master/LICENSE)
+[![Build Status](https://img.shields.io/circleci/project/github/raitosyo/rteipc/master.svg)](https://circleci.com/gh/raitosyo/rteipc)
 
 rteipc is a simple user-defined routing IPC library; uses libevent.
 

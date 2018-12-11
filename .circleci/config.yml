@@ -1,0 +1,28 @@
+# CircleCI 2.0 configuration.
+#
+version: 2.0
+jobs:
+  "gcc - build":
+    docker:
+      - image: ubuntu:18.04
+        environment:
+          CC: gcc
+          CXX: g++
+          CTEST_OUTPUT_ON_FAILURE: 1
+    steps:
+      - checkout
+      - run: apt-get update -qq
+      - run: apt-get install -y software-properties-common
+      - run: >
+          apt-get install -y
+          build-essential
+          pkg-config
+          libevent-dev
+          cmake
+      - run: mkdir build; cd build; cmake ..; cmake --build .
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - "gcc - build"
