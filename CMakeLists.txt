@@ -41,4 +41,3 @@ install (
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 
 add_subdirectory(src)
-add_subdirectory(demo)
