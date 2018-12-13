@@ -4,6 +4,7 @@
 #ifndef _RTEIPC_H
 #define _RTEIPC_H
 
+#include <sys/time.h>
 #include <event2/event.h>
 #include <event2/buffer.h>
 
@@ -18,7 +19,7 @@ typedef void (*rteipc_sw_handler)(int sw, int ep, void *data,
 void rteipc_init(struct event_base *base);
 void rteipc_reinit(void);
 void rteipc_shutdown(void);
-void rteipc_dispatch(void);
+void rteipc_dispatch(struct timeval *tv);
 int rteipc_connect(const char *uri, rteipc_read_cb fn, void *arg);
 int rteipc_send(int id, const void *data, size_t len);
 int rteipc_evsend(int id, struct evbuffer *buf);

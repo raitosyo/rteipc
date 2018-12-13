@@ -43,7 +43,7 @@ static void process(const char *uri, const char *msg)
 		return;
 	}
 	rteipc_send(ctx, msg, strlen(msg));
-	rteipc_dispatch();
+	rteipc_dispatch(NULL);
 	rteipc_shutdown();
 }
 
@@ -61,7 +61,7 @@ static void broker(const char *uri1, const char *uri2)
 		return;
 	}
 	rteipc_ep_route(ep1, ep2, RTEIPC_BIDIRECTIONAL);
-	rteipc_dispatch();
+	rteipc_dispatch(NULL);
 	rteipc_shutdown();
 }
 

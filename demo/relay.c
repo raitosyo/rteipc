@@ -53,7 +53,7 @@ static void process(int starter, const char *uri)
 		fprintf(stderr, "%d ", count++);
 		rteipc_send(ctx, &count, 4);
 	}
-	rteipc_dispatch();
+	rteipc_dispatch(NULL);
 	rteipc_shutdown();
 }
 
@@ -75,7 +75,7 @@ static void broker(const char *uri1, const char *uri2, const char *uri3)
 	rteipc_ep_route(ep1, ep2, RTEIPC_FORWARD);
 	rteipc_ep_route(ep1, ep3, RTEIPC_REVERSE);
 	rteipc_ep_route(ep2, ep3, RTEIPC_FORWARD);
-	rteipc_dispatch();
+	rteipc_dispatch(NULL);
 	rteipc_shutdown();
 }
 

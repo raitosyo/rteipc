@@ -3,17 +3,21 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <sys/time.h>
 #include <event2/event.h>
 
 
 __thread struct event_base *__base;
 
-void rteipc_dispatch(void)
+void rteipc_dispatch(struct timeval *tv)
 {
 	if (!__base)
 		return;
 
-	event_base_dispatch(__base);
+	if (tv)
+		event_base_loopexit(__base, tv);
+	else
+		event_base_dispatch(__base);
 }
 
 void rteipc_reinit(void)
