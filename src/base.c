@@ -16,8 +16,7 @@ void rteipc_dispatch(struct timeval *tv)
 
 	if (tv)
 		event_base_loopexit(__base, tv);
-	else
-		event_base_dispatch(__base);
+	event_base_dispatch(__base);
 }
 
 void rteipc_reinit(void)
