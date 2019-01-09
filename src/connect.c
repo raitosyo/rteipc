@@ -19,12 +19,18 @@
 
 #define MAX_NR_CN		(MAX_NR_EP * 2)
 
+#define ctx_lock(_c)		pthread_mutex_lock(&(_c)->lock)
+#define ctx_unlock(_c)		pthread_mutex_unlock(&(_c)->lock)
+
 extern __thread struct event_base *__base;
 
 struct rteipc_ctx {
 	struct bufferevent *bev;
-	rteipc_read_cb fn;
+	rteipc_read_cb read_cb;
+	rteipc_err_cb err_cb;
 	void *arg;
+	short flag;
+	pthread_mutex_t lock;
 };
 
 static struct rteipc_ctx *__ctx_table[MAX_NR_CN];
@@ -32,44 +38,79 @@ static int __ctx_index;
 static pthread_mutex_t ctx_tbl_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
-static inline struct rteipc_ctx *ctx_get(int idx)
+static inline struct rteipc_ctx *ctx_get(int cid)
 {
-	struct rteipc_ctx *ctx;
+	struct rteipc_ctx *ret;
+
+	if (cid >= MAX_NR_CN)
+		return NULL;
 
 	pthread_mutex_lock(&ctx_tbl_mutex);
-
-	if (idx < MAX_NR_CN) {
-		ctx = __ctx_table[idx];
-		pthread_mutex_unlock(&ctx_tbl_mutex);
-		return ctx;
-	}
-
+	ret = __ctx_table[cid];
 	pthread_mutex_unlock(&ctx_tbl_mutex);
-	return NULL;
+	return ret;
 }
 
-static inline int ctx_register(struct rteipc_ctx *ctx)
+static inline void ctx_destroy(struct rteipc_ctx *ctx)
 {
-	int ret;
+	if (ctx) {
+		bufferevent_free(ctx->bev);
+		free(ctx);
+	}
+}
+
+static inline int __find_next_ctx(int start)
+{
+	int i;
+
+	for (i = start; i < start + MAX_NR_CN; i++) {
+		if (start - 1 == i % MAX_NR_CN)
+			continue;
+		else if (__ctx_table[i % MAX_NR_CN] == NULL)
+			return (i % MAX_NR_CN);
+	}
+	return -1;
+}
+
+static int ctx_register(struct rteipc_ctx *ctx)
+{
+	int cid;
 
 	pthread_mutex_lock(&ctx_tbl_mutex);
 
-	if (__ctx_index < MAX_NR_CN) {
-		ret = __ctx_index;
-		__ctx_table[__ctx_index++] = ctx;
+	cid = __find_next_ctx(__ctx_index);
+	if (cid < 0) {
 		pthread_mutex_unlock(&ctx_tbl_mutex);
-		return ret;
+		fprintf(stderr, "Connection limit(max=%d) exceeded\n",
+				MAX_NR_CN);
+		return -1;
 	}
 
+	__ctx_table[cid] = ctx;
+	__ctx_index = cid + 1;
+
 	pthread_mutex_unlock(&ctx_tbl_mutex);
-	fprintf(stderr, "Connection limit(max=%d) exceeded\n", MAX_NR_CN);
-	return -1;
+	return cid;
+}
+
+static inline void ctx_unregister(int cid)
+{
+	int i;
+
+	if (cid >= MAX_NR_CN) {
+		fprintf(stderr, "Invalid connection id is specified\n");
+		return;
+	}
+
+	pthread_mutex_lock(&ctx_tbl_mutex);
+	__ctx_table[cid] == NULL;
+	pthread_mutex_unlock(&ctx_tbl_mutex);
 }
 
 static void connect_event_cb(struct bufferevent *bev, short events, void *arg)
 {
-	int id = (intptr_t)arg;
-	struct rteipc_ctx *ctx = ctx_get(id);
+	int cid = (intptr_t)arg;
+	struct rteipc_ctx *ctx = ctx_get(cid);
 
 	// connection established
 	if (events & BEV_EVENT_CONNECTED)
@@ -80,69 +121,101 @@ static void connect_event_cb(struct bufferevent *bev, short events, void *arg)
 			strerror(errno));
 
 	if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR)) {
-		bufferevent_free(bev);
-		ctx->bev = NULL;
+		ctx_unregister(cid);
+		if (ctx->err_cb)
+			ctx->err_cb(cid, events, ctx->arg);
+		ctx_destroy(ctx);
 	}
 
-	event_base_loopbreak(__base);
+	if (!(ctx->flag & RTEIPC_NO_EXIT_ON_ERR))
+		event_base_loopbreak(__base);
 }
 
 static void connect_read_cb(struct bufferevent *bev, void *arg)
 {
-	int id = (intptr_t)arg;
-	struct rteipc_ctx *ctx = ctx_get(id);
+	int cid = (intptr_t)arg;
+	struct rteipc_ctx *ctx = ctx_get(cid);
 	struct evbuffer *in = bufferevent_get_input(bev);
 	char *msg;
 	size_t len;
 	int ret;
 
-	for (;;) {
-		if (!(ret = rteipc_msg_drain(in, &len, &msg)))
-			return;
+	ctx_lock(ctx);
 
-		if (ret < 0) {
-			fprintf(stderr, "Error reading data\n");
+	for (;;) {
+		if (!(ret = rteipc_msg_drain(in, &len, &msg))) {
+			ctx_unlock(ctx);
 			return;
 		}
 
-		if (ctx->fn)
-			ctx->fn(id, msg, len, ctx->arg);
+		if (ret < 0) {
+			fprintf(stderr, "Error reading data\n");
+			ctx_unlock(ctx);
+			return;
+		}
+
+		if (ctx->read_cb)
+			ctx->read_cb(cid, msg, len, ctx->arg);
 		free(msg);
 	}
+
+	ctx_unlock(ctx);
 }
 
-int rteipc_evsend(int id, struct evbuffer *buf)
+int rteipc_setcb(int cid, rteipc_read_cb read_cb, rteipc_err_cb err_cb,
+			void *arg, short flag)
 {
-	struct rteipc_ctx *ctx = ctx_get(id);
+	struct rteipc_ctx *ctx = ctx_get(cid);
 	int ret;
 
-	if (!ctx || !ctx->bev) {
-		fprintf(stderr, "Invalid connection id:%d\n", id);
+	if (!ctx) {
+		fprintf(stderr, "Invalid connection id:%d\n", cid);
+		return -1;
+	}
+
+	ctx_lock(ctx);
+
+	ctx->read_cb = read_cb;
+	ctx->err_cb = err_cb;
+	ctx->arg = arg;
+	ctx->flag = flag;
+
+	ctx_unlock(ctx);
+	return 0;
+}
+
+int rteipc_evsend(int cid, struct evbuffer *buf)
+{
+	struct rteipc_ctx *ctx = ctx_get(cid);
+	int ret;
+
+	if (!ctx) {
+		fprintf(stderr, "Invalid connection id:%d\n", cid);
 		return -1;
 	}
 	return rteipc_evbuffer(ctx->bev, buf);
 }
 
-int rteipc_send(int id, const void *data, size_t len)
+int rteipc_send(int cid, const void *data, size_t len)
 {
-	struct rteipc_ctx *ctx = ctx_get(id);
+	struct rteipc_ctx *ctx = ctx_get(cid);
 	int ret;
 
-	if (!ctx || !ctx->bev) {
-		fprintf(stderr, "Invalid connection id:%d\n", id);
+	if (!ctx) {
+		fprintf(stderr, "Invalid connection id:%d\n", cid);
 		return -1;
 	}
 	return rteipc_buffer(ctx->bev, data, len);
 }
 
-int rteipc_connect(const char *uri, rteipc_read_cb cb, void *arg)
+int rteipc_connect(const char *uri)
 {
 	struct rteipc_ctx *ctx;
 	struct bufferevent *bev;
 	struct sockaddr_un addr;
 	int addrlen;
 	char protocol[16], path[128];
-	int ctx_id, err;
+	int cid, err;
 
 	sscanf(uri, "%[^:]://%99[^:]", protocol, path);
 
@@ -151,28 +224,27 @@ int rteipc_connect(const char *uri, rteipc_read_cb cb, void *arg)
 		return -1;
 	}
 
+	bev = bufferevent_socket_new(__base, -1, BEV_OPT_CLOSE_ON_FREE);
+	if (!bev) {
+		fprintf(stderr, "Failed to create socket\n");
+		return -1;
+	}
+
 	ctx = malloc(sizeof(*ctx));
 	if (!ctx) {
 		fprintf(stderr,
 			"Failed to allocate memory to create connection\n");
-		return -1;
-	}
-
-	bev = bufferevent_socket_new(__base, -1, BEV_OPT_CLOSE_ON_FREE);
-	if (!bev) {
-		fprintf(stderr, "Failed to create socket\n");
-		goto free_ctx;
-	}
-
-	ctx->bev = bev;
-	ctx->fn = cb;
-	ctx->arg = arg;
-	ctx_id = ctx_register(ctx);
-	if (ctx_id < 0)
 		goto free_bev;
+	}
+
+	pthread_mutex_init(&ctx->lock, NULL);
+	ctx->bev = bev;
+	cid = ctx_register(ctx);
+	if (cid < 0)
+		goto free_ctx;
 
 	bufferevent_setcb(bev, connect_read_cb, NULL,
-				connect_event_cb, (void *)(intptr_t)ctx_id);
+				connect_event_cb, (void *)(intptr_t)cid);
 	bufferevent_enable(bev, EV_READ);
 
 	memset(&addr, 0, sizeof(addr));
@@ -190,14 +262,16 @@ int rteipc_connect(const char *uri, rteipc_read_cb cb, void *arg)
 
 	if (err < 0) {
 		fprintf(stderr, "Failed to connect to %s\n", uri);
-		goto free_ctx;
+		goto close_ctx;
 	}
 
-	return ctx_id;
+	return cid;
 
-free_bev:
-	bufferevent_free(ctx->bev);
+close_ctx:
+	ctx_unregister(cid);
 free_ctx:
 	free(ctx);
+free_bev:
+	bufferevent_free(bev);
 	return -1;
 }

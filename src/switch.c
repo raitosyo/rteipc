@@ -127,6 +127,13 @@ int rteipc_sw_xfer(int sw_id, int ep_id, const void *data, size_t len)
 	return ret;
 }
 
+static void err_cb(int ctx, short events, void *arg)
+{
+	struct sw_ep *sep = arg;
+	memset(sep, 0, sizeof(*sep));
+	//TODO close endpoints
+}
+
 static void data_cb(int ctx, void *data, size_t len, void *arg)
 {
 	struct sw_ep *sep = arg;
@@ -187,13 +194,13 @@ int rteipc_sw_ep_open(int sw_id, rteipc_sw_handler handler, void *arg)
 	sep->handler = handler;
 	sep->data = arg;
 	sep->parent = sw;
-	sep->ctx = rteipc_connect(path, data_cb, sep);
+	sep->ctx = rteipc_connect(path);
 	if (sep->ctx < 0) {
 		fprintf(stderr, "Failed to connect to ep=%s\n", path);
 		memset(sep, 0, sizeof(*sep));
 		goto err;
 	}
-
+	rteipc_setcb(sep->ctx, data_cb, err_cb, sep, RTEIPC_NO_EXIT_ON_ERR);
 	sw->ep_num++;
 	pthread_mutex_unlock(&sw_tbl_mutex);
 	return ep_id;

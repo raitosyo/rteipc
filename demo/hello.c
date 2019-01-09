@@ -37,11 +37,12 @@ static void process(const char *uri, const char *msg)
 	int ctx;
 
 	rteipc_init(base);
-	ctx = rteipc_connect(uri, read_cb, base);
+	ctx = rteipc_connect(uri);
 	if (ctx < 0) {
 		fprintf(stderr, "Failed to connect %s\n", uri);
 		return;
 	}
+	rteipc_setcb(ctx, read_cb, NULL, base, 0);
 	rteipc_send(ctx, msg, strlen(msg));
 	rteipc_dispatch(NULL);
 	rteipc_shutdown();

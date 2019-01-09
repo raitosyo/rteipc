@@ -42,7 +42,7 @@ static void process(int starter, const char *uri)
 	int ctx, count = 1;
 
 	rteipc_init(NULL);
-	ctx = rteipc_connect(uri, read_cb, NULL);
+	ctx = rteipc_connect(uri);
 	if (ctx < 0) {
 		fprintf(stderr, "Failed to connect %s\n", uri);
 		return;
@@ -53,6 +53,7 @@ static void process(int starter, const char *uri)
 		fprintf(stderr, "%d ", count++);
 		rteipc_send(ctx, &count, 4);
 	}
+	rteipc_setcb(ctx, read_cb, NULL, NULL, 0);
 	rteipc_dispatch(NULL);
 	rteipc_shutdown();
 }
