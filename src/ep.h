@@ -11,6 +11,7 @@
 
 #define RTEIPC_IPC		0
 #define RTEIPC_TTY		1
+#define RTEIPC_GPIO		2
 
 #define RTEIPC_ROUTE_ADD	0
 #define RTEIPC_ROUTE_DEL	1

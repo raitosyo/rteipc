@@ -12,7 +12,8 @@ set(RTEIPC_SOURCES
     message.c
     ep.c
     ep/ep_ipc.c
-    ep/ep_tty.c)
+    ep/ep_tty.c
+    ep/ep_gpio.c)
 
 if (RTEIPC_STATIC_LIB)
     add_library(${PROJECT_NAME} STATIC ${RTEIPC_SOURCES})
@@ -41,5 +42,6 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(PkgConfig)
 find_package(Threads REQUIRED)
 pkg_check_modules(LIBEVENT REQUIRED libevent libevent_pthreads)
+pkg_check_modules(LIBGPIOD REQUIRED libgpiod)
 
-target_link_libraries(rteipc ${LIBEVENT_LIBRARIES})
+target_link_libraries(rteipc ${LIBEVENT_LIBRARIES} ${LIBGPIOD_LIBRARIES})

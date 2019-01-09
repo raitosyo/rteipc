@@ -12,6 +12,7 @@ extern __thread struct event_base *__base;
 
 extern struct rteipc_ep_ops ep_ipc;
 extern struct rteipc_ep_ops ep_tty;
+extern struct rteipc_ep_ops ep_gpio;
 
 static struct rteipc_ep *__ep_table[MAX_NR_EP];
 static int __ep_index;
@@ -20,6 +21,7 @@ static pthread_mutex_t ep_tbl_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct rteipc_ep_ops *ep_ops_list[] = {
 	&ep_ipc,
 	&ep_tty,
+	&ep_gpio,
 };
 
 
@@ -121,12 +123,14 @@ int rteipc_ep_open(const char *uri)
 	struct rteipc_ep_ops *ops;
 	int type;
 
-	sscanf(uri, "%[^:]://%99[^:]", protocol, path);
+	sscanf(uri, "%[^:]://%99[^\n]", protocol, path);
 
 	if (!strcmp(protocol, "ipc"))
 		type = RTEIPC_IPC;
 	else if (!strcmp(protocol, "tty"))
 		type = RTEIPC_TTY;
+	else if (!strcmp(protocol, "gpio"))
+		type = RTEIPC_GPIO;
 	else
 		return -1;
 
