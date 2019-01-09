@@ -15,15 +15,14 @@
 extern __thread struct event_base *__base;
 
 struct rteipc_sw {
-	int sw_id;
-	int connections;
-	struct ep_connection {
+	int ep_num;
+	struct sw_ep {
 		int ep_id;
 		int ctx;
 		rteipc_sw_handler handler;
 		void *data;
 		struct rteipc_sw *parent;
-	} cn_list[MAX_NR_EP];
+	} endpoints[MAX_NR_EP];
 };
 
 static struct rteipc_sw *__sw_table[MAX_NR_SW];
@@ -31,28 +30,57 @@ static int __sw_index;
 static pthread_mutex_t sw_tbl_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
-static inline int sw_register(struct rteipc_sw *sw)
+static inline int __find_sw(struct rteipc_sw *sw)
 {
-	int ret;
+	int i;
 
-	pthread_mutex_lock(&sw_tbl_mutex);
-
-	if (__sw_index < MAX_NR_SW) {
-		ret = __sw_index;
-		__sw_table[__sw_index++] = sw;
-		pthread_mutex_unlock(&sw_tbl_mutex);
-		return ret;
+	for (i = 0; i < MAX_NR_SW; i++) {
+		if (__sw_table[i] == sw)
+		break;
 	}
+	if (i == MAX_NR_SW)
+		return -1;
+	return i;
+}
 
-	pthread_mutex_unlock(&sw_tbl_mutex);
-	fprintf(stderr, "Switch limit(max=%d) exceeded\n", MAX_NR_SW);
+static inline int __find_next_sw(int start)
+{
+	int i;
+
+	for (i = start; i < start + MAX_NR_SW; i++) {
+		if (start - 1 == i % MAX_NR_SW)
+			continue;
+		else if (__sw_table[i % MAX_NR_SW] == NULL)
+			return (i % MAX_NR_SW);
+	}
 	return -1;
 }
 
-static inline struct ep_connection *find_connection(int sw_id, int ep_id)
+static inline int sw_register(struct rteipc_sw *sw)
+{
+	int sid;
+
+	pthread_mutex_lock(&sw_tbl_mutex);
+
+	sid = __find_next_sw(__sw_index);
+	if (sid < 0) {
+		pthread_mutex_unlock(&sw_tbl_mutex);
+		fprintf(stderr, "Switch limit(max=%d) exceeded\n",
+				MAX_NR_SW);
+		return -1;
+	}
+
+	__sw_table[sid] = sw;
+	__sw_index = sid + 1;
+
+	pthread_mutex_unlock(&sw_tbl_mutex);
+	return sid;
+}
+
+static inline struct sw_ep *find_sw_ep(int sw_id, int ep_id)
 {
 	struct rteipc_sw *sw = NULL;
-	struct ep_connection *cn;
+	struct sw_ep *sep;
 	int i;
 
 	pthread_mutex_lock(&sw_tbl_mutex);
@@ -63,11 +91,11 @@ static inline struct ep_connection *find_connection(int sw_id, int ep_id)
 	if (!sw)
 		goto out;
 
-	for (i = 0; i < sw->connections; i++) {
-		if (sw->cn_list[i].ep_id == ep_id) {
-			cn = &sw->cn_list[i];
+	for (i = 0; i < sw->ep_num; i++) {
+		if (sw->endpoints[i].ep_id == ep_id) {
+			sep = &sw->endpoints[i];
 			pthread_mutex_unlock(&sw_tbl_mutex);
-			return cn;
+			return sep;
 		}
 	}
 
@@ -78,14 +106,14 @@ out:
 
 int rteipc_sw_evxfer(int sw_id, int ep_id, struct evbuffer *buf)
 {
-	struct ep_connection *cn = find_connection(sw_id, ep_id);
+	struct sw_ep *sep = find_sw_ep(sw_id, ep_id);
 
-	if (!cn) {
+	if (!sep) {
 		fprintf(stderr, "Invalid sw-ep=%d is specified\n", ep_id);
 		return -1;
 	}
 
-	return rteipc_evsend(cn->ctx, buf);
+	return rteipc_evsend(sep->ctx, buf);
 }
 
 int rteipc_sw_xfer(int sw_id, int ep_id, const void *data, size_t len)
@@ -101,9 +129,15 @@ int rteipc_sw_xfer(int sw_id, int ep_id, const void *data, size_t len)
 
 static void data_cb(int ctx, void *data, size_t len, void *arg)
 {
-	struct ep_connection *cn = arg;
-	struct rteipc_sw *sw = cn->parent;
-	cn->handler(sw->sw_id, cn->ep_id, data, len, cn->data);
+	struct sw_ep *sep = arg;
+	struct rteipc_sw *sw = sep->parent;
+	int sid;
+
+	pthread_mutex_lock(&sw_tbl_mutex);
+	sid = __find_sw(sw);
+	pthread_mutex_unlock(&sw_tbl_mutex);
+
+	sep->handler(sid, sep->ep_id, data, len, sep->data);
 }
 
 static void rand_fname(char *out, size_t len)
@@ -123,7 +157,7 @@ int rteipc_sw_ep_open(int sw_id, rteipc_sw_handler handler, void *arg)
 	const char *fmt = "ipc://@rteipc-sw%02d-%s";
 	char path[32] = {0}, fname[7];
 	struct rteipc_sw *sw = NULL;
-	struct ep_connection *cn;
+	struct sw_ep *sep;
 	struct bufferevent *bev;
 	struct sockaddr_un addr;
 	int ep_id;
@@ -145,26 +179,26 @@ int rteipc_sw_ep_open(int sw_id, rteipc_sw_handler handler, void *arg)
 	ep_id = rteipc_ep_open(path);
 	if (ep_id < 0) {
 		fprintf(stderr, "Failed to create ep=%s\n", path);
-		goto free_cn;
+		goto err;
 	}
 
-	cn = &sw->cn_list[sw->connections];
-	cn->ep_id = ep_id;
-	cn->handler = handler;
-	cn->data = arg;
-	cn->parent = sw;
-	cn->ctx = rteipc_connect(path, data_cb, cn);
-	if (cn->ctx < 0) {
+	sep = &sw->endpoints[sw->ep_num];
+	sep->ep_id = ep_id;
+	sep->handler = handler;
+	sep->data = arg;
+	sep->parent = sw;
+	sep->ctx = rteipc_connect(path, data_cb, sep);
+	if (sep->ctx < 0) {
 		fprintf(stderr, "Failed to connect to ep=%s\n", path);
-		goto free_cn;
+		memset(sep, 0, sizeof(*sep));
+		goto err;
 	}
 
-	sw->connections++;
+	sw->ep_num++;
 	pthread_mutex_unlock(&sw_tbl_mutex);
 	return ep_id;
 
-free_cn:
-	free(cn);
+err:
 	pthread_mutex_unlock(&sw_tbl_mutex);
 	return -1;
 }
