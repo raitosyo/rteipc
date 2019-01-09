@@ -18,6 +18,7 @@ jobs:
           build-essential
           pkg-config
           libevent-dev
+          libgpiod-dev
           cmake
       - run: mkdir build; cd build; cmake ..; cmake --build .
 
