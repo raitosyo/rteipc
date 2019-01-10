@@ -16,11 +16,13 @@ extern __thread struct event_base *__base;
 
 struct rteipc_sw {
 	int ep_num;
+	rteipc_sw_cb handler;
+	void *data;
+	short flag;
+
 	struct sw_ep {
 		int ep_id;
 		int ctx;
-		rteipc_sw_handler handler;
-		void *data;
 		struct rteipc_sw *parent;
 	} endpoints[MAX_NR_EP];
 };
@@ -29,6 +31,19 @@ static struct rteipc_sw *__sw_table[MAX_NR_SW];
 static int __sw_index;
 static pthread_mutex_t sw_tbl_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+
+static inline struct rteipc_sw *sw_get(int sw_id)
+{
+	struct rteipc_sw *ret;
+
+	if (sw_id >= MAX_NR_SW)
+		return NULL;
+
+	pthread_mutex_lock(&sw_tbl_mutex);
+	ret = __sw_table[sw_id];
+	pthread_mutex_unlock(&sw_tbl_mutex);
+	return ret;
+}
 
 static inline int __find_sw(struct rteipc_sw *sw)
 {
@@ -54,7 +69,7 @@ static inline int __find_next_sw(int start)
 	return -1;
 }
 
-static inline int sw_register(struct rteipc_sw *sw)
+static int sw_register(struct rteipc_sw *sw)
 {
 	int sid;
 
@@ -144,7 +159,8 @@ static void data_cb(int ctx, void *data, size_t len, void *arg)
 	sid = __find_sw(sw);
 	pthread_mutex_unlock(&sw_tbl_mutex);
 
-	sep->handler(sid, sep->ep_id, data, len, sep->data);
+	if (sw->handler)
+		sw->handler(sid, sep->ep_id, data, len, sw->data);
 }
 
 static void rand_fname(char *out, size_t len)
@@ -159,7 +175,22 @@ static void rand_fname(char *out, size_t len)
 	out[end] = 0;
 }
 
-int rteipc_sw_ep_open(int sw_id, rteipc_sw_handler handler, void *arg)
+int rteipc_sw_setcb(int sw_id, rteipc_sw_cb handler, void *arg, short flag)
+{
+	struct rteipc_sw *sw = sw_get(sw_id);
+
+	if (!sw) {
+		fprintf(stderr, "Invalid switch id:%d\n", sw_id);
+		return -1;
+	}
+
+	sw->handler = handler;
+	sw->data = arg;
+	sw->flag = flag;
+	return 0;
+}
+
+int rteipc_sw_ep_open(int sw_id)
 {
 	const char *fmt = "ipc://@rteipc-sw%02d-%s";
 	char path[32] = {0}, fname[7];
@@ -167,7 +198,7 @@ int rteipc_sw_ep_open(int sw_id, rteipc_sw_handler handler, void *arg)
 	struct sw_ep *sep;
 	struct bufferevent *bev;
 	struct sockaddr_un addr;
-	int ep_id;
+	int ret;
 
 	pthread_mutex_lock(&sw_tbl_mutex);
 
@@ -183,31 +214,28 @@ int rteipc_sw_ep_open(int sw_id, rteipc_sw_handler handler, void *arg)
 	rand_fname(fname, sizeof(fname));
 	snprintf(path, sizeof(path), fmt, sw_id, fname);
 
-	ep_id = rteipc_ep_open(path);
-	if (ep_id < 0) {
+	ret = rteipc_ep_open(path);
+	if (ret < 0) {
 		fprintf(stderr, "Failed to create ep=%s\n", path);
-		goto err;
+		goto out;
 	}
 
 	sep = &sw->endpoints[sw->ep_num];
-	sep->ep_id = ep_id;
-	sep->handler = handler;
-	sep->data = arg;
+	sep->ep_id = ret;
 	sep->parent = sw;
 	sep->ctx = rteipc_connect(path);
 	if (sep->ctx < 0) {
 		fprintf(stderr, "Failed to connect to ep=%s\n", path);
 		memset(sep, 0, sizeof(*sep));
-		goto err;
+		ret = -1;
+		goto out;
 	}
-	rteipc_setcb(sep->ctx, data_cb, err_cb, sep, RTEIPC_NO_EXIT_ON_ERR);
-	sw->ep_num++;
-	pthread_mutex_unlock(&sw_tbl_mutex);
-	return ep_id;
 
-err:
+	rteipc_setcb(sep->ctx, data_cb, err_cb, sep, 0);
+	sw->ep_num++;
+out:
 	pthread_mutex_unlock(&sw_tbl_mutex);
-	return -1;
+	return ret;
 }
 
 int rteipc_sw(void)
