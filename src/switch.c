@@ -130,8 +130,10 @@ int rteipc_sw_xfer(int sw_id, int ep_id, const void *data, size_t len)
 static void err_cb(int ctx, short events, void *arg)
 {
 	struct sw_ep *sep = arg;
+
+	fprintf(stderr, "switch fatal error occurred\n");
+	rteipc_ep_close(sep->ep_id);
 	memset(sep, 0, sizeof(*sep));
-	//TODO close endpoints
 }
 
 static void data_cb(int ctx, void *data, size_t len, void *arg)

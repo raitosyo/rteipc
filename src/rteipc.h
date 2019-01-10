@@ -33,6 +33,7 @@ int rteipc_sw_xfer(int sw_id, int ep_id, const void *data, size_t len);
 int rteipc_sw_evxfer(int sw_id, int ep_id, struct evbuffer *buf);
 int rteipc_sw_ep_open(int sw_id, rteipc_sw_handler handler, void *arg);
 int rteipc_ep_open(const char *uri);
+int rteipc_ep_close(int ep_id);
 int rteipc_ep_route(int ep_src, int ep_dst, int flag);
 
 #endif /* _RTEIPC_H */
