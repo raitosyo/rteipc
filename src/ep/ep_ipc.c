@@ -38,6 +38,8 @@ static void event_cb(struct bufferevent *bev, short events, void *arg)
 	}
 	bufferevent_free(bev);
 	data->down = NULL;
+	/* accept another connection again */
+	evconnlistener_enable(data->el);
 }
 
 static void upstream(struct bufferevent *bev, void *arg)
@@ -86,6 +88,9 @@ static void listen_cb(struct evconnlistener *el, evutil_socket_t fd,
 		fprintf(stderr, "Error constructing bufferevent\n");
 		return;
 	}
+
+	/* accept only one connection */
+	evconnlistener_disable(el);
 
 	bufferevent_setcb(bev, upstream, NULL, event_cb, self);
 	bufferevent_enable(bev, EV_READ);
