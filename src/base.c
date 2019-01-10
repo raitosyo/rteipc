@@ -41,5 +41,4 @@ void rteipc_shutdown(void)
 {
 	if (__base)
 		event_base_free(__base);
-	libevent_global_shutdown();
 }
