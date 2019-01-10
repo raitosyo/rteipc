@@ -103,7 +103,7 @@ static inline void ctx_unregister(int cid)
 	}
 
 	pthread_mutex_lock(&ctx_tbl_mutex);
-	__ctx_table[cid] == NULL;
+	__ctx_table[cid] = NULL;
 	pthread_mutex_unlock(&ctx_tbl_mutex);
 }
 
