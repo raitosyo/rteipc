@@ -213,6 +213,7 @@ err:
 int rteipc_sw(void)
 {
 	struct rteipc_sw *sw;
+	int ret;
 
 	sw = malloc(sizeof(*sw));
 	if (!sw) {
@@ -221,5 +222,11 @@ int rteipc_sw(void)
 	}
 
 	memset(sw, 0, sizeof(*sw));
-	return sw_register(sw);
+
+	ret = sw_register(sw);
+	if (ret < 0) {
+		free(sw);
+		return -1;
+	}
+	return ret;
 }
