@@ -183,7 +183,14 @@ static int ipc_bind(struct rteipc_ep *self, const char *path)
 static void ipc_unbind(struct rteipc_ep *self)
 {
 	struct ipc_data *data = self->data;
+
 	evconnlistener_free(data->el);
+	if (data->up_read)
+		bufferevent_free(data->up_read);
+	if (data->up_write)
+		bufferevent_free(data->up_write);
+	if (data->down)
+		bufferevent_free(data->down);
 	if (!data->abstract)
 		unlink(data->path);
 	free(data);

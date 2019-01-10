@@ -196,6 +196,7 @@ static int tty_bind(struct rteipc_ep *self, const char *path)
 static void tty_unbind(struct rteipc_ep *self)
 {
 	struct tty_data *data = self->data;
+	event_del(data->ev);
 	close(data->down_fd);
 }
 

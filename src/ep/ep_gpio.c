@@ -211,6 +211,7 @@ free_data:
 static void gpio_unbind(struct rteipc_ep *self)
 {
 	struct gpio_data *data = self->data;
+	event_del(data->ev);
 }
 
 struct rteipc_ep_ops ep_gpio = {
