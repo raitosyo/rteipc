@@ -153,26 +153,32 @@ int rteipc_ep_open(const char *uri)
 {
 	char protocol[16], path[128];
 	struct rteipc_ep *ep;
-	struct rteipc_ep_ops *ops;
-	int type;
+	int type, eid;
 
 	sscanf(uri, "%[^:]://%99[^\n]", protocol, path);
 
-	if (!strcmp(protocol, "ipc"))
+	if (!strcmp(protocol, "ipc")) {
 		type = RTEIPC_IPC;
-	else if (!strcmp(protocol, "tty"))
+	} else if (!strcmp(protocol, "tty")) {
 		type = RTEIPC_TTY;
-	else if (!strcmp(protocol, "gpio"))
+	} else if (!strcmp(protocol, "gpio")) {
 		type = RTEIPC_GPIO;
-	else
+	} else {
+		fprintf(stderr, "Unknown protocol:%s\n", protocol);
 		return -1;
+	}
 
 	ep = ep_new(type);
-	ops = ep->ops;
-	if (ops->bind(ep, path))
+	eid = ep_register(ep);
+	if (eid < 0)
 		return -1;
 
-	return ep_register(ep);
+	if (ep->ops->bind(ep, path)) {
+		ep_unregister(eid);
+		return -1;
+	}
+
+	return eid;
 }
 
 int rteipc_ep_close(int ep_id)
