@@ -64,9 +64,7 @@ static inline int __find_next_ctx(int start)
 	int i;
 
 	for (i = start; i < start + MAX_NR_CN; i++) {
-		if (start - 1 == i % MAX_NR_CN)
-			continue;
-		else if (__ctx_table[i % MAX_NR_CN] == NULL)
+		if (__ctx_table[i % MAX_NR_CN] == NULL)
 			return (i % MAX_NR_CN);
 	}
 	return -1;

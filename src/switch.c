@@ -36,7 +36,7 @@ static inline int __find_sw(struct rteipc_sw *sw)
 
 	for (i = 0; i < MAX_NR_SW; i++) {
 		if (__sw_table[i] == sw)
-		break;
+			break;
 	}
 	if (i == MAX_NR_SW)
 		return -1;
@@ -48,9 +48,7 @@ static inline int __find_next_sw(int start)
 	int i;
 
 	for (i = start; i < start + MAX_NR_SW; i++) {
-		if (start - 1 == i % MAX_NR_SW)
-			continue;
-		else if (__sw_table[i % MAX_NR_SW] == NULL)
+		if (__sw_table[i % MAX_NR_SW] == NULL)
 			return (i % MAX_NR_SW);
 	}
 	return -1;
