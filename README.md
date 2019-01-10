@@ -2,7 +2,7 @@
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/raitosyo/rteipc/master/LICENSE)
 [![Build Status](https://img.shields.io/circleci/project/github/raitosyo/rteipc/master.svg)](https://circleci.com/gh/raitosyo/rteipc)
 
-rteipc is a simple user-defined routing IPC library; uses libevent.
+rteipc is a simple user-defined routing IPC library for Linux; uses libevent.
 
 ## building rteipc
 
@@ -12,63 +12,80 @@ To create an build in the project tree:
     cmake ../
     cmake --build .
 
-## what's rteipc?
+## endpoint
 
-When working on embedded systems, we sometimes see the bords running different
-instances of operating system i.g. Linux and real-time OS such as FreeRTOS.
-These bords might have two SoCs connected each other by UART with one running
-Linux and the other running real-time OS, or a modern SoC employing
-heterogeneous remote processor devices in AMP configurations which can run
-real-time OS inside it. But in any case, a process running in Linux usually
-needs to communicate with a task running in real-time OS.
+When using rteipc, an endpoint is always an interface to a process or a file
+(e.g. socket/tty/gpio).
 
-The interface with real-time OS will be provided as TTY(/dev/tty*) or any other
-specific device file in Linux depending on the implementation of the board
-and/or the driver software.
-So we need to write a process sending/receiving data to/from the interface with
-real-time OS and also communicating with other processes in Linux if necessary.
+## example
 
-rteipc is for them to do that.
+    #include <stdio.h>
+    #include <stdlib.h>
+    #include <string.h>
+    #include <rteipc.h>
 
-## communicating with real-time OS
-This is a very simple code snippet for communicating with real-time OS, assuming
-that OpenAMP/RPMsg is used and TTY driver(/dev/ttyRPMSG) is provided.
+    static void read_cb(int ctx, void *data, size_t len, void *arg)
+    {
+        // display data from /dev/ttyUSB0
+        printf("%.*s", len, data);
+    }
 
+    int main(void)
+    {
+        int ctx;
+        int ipc, tty;
+        const char *ipc_path = "ipc://@/tmp/rteipc";
+        const char *tty_path = "tty:///dev/ttyUSB0,115200";
 
-    #include "rteipc.h"
+        rteipc_init(NULL);
 
-    ...
-    rteipc_init(NULL);
-    /* Create IPC endpoint for Linux*/
-    int ep1 = rteipc_ep_open("ipc://@rteipc");
-    /* Create TTY endpoint for RTOS */
-    int ep2 = rteipc_ep_open("tty:///dev/ttyRPMSG,115200");
-    /* Add a route between two endpoints */
-    rteipc_ep_route(ep1, ep2, RTEIPC_BIDIRECTIONAL);
-    
-    /* Connect to IPC endpoint */
-    int ctx = rteipc_connect("ipc://@rteipc", NULL, NULL);
+        ipc = rteipc_ep_open(ipc_path);
+        tty = rteipc_ep_open(tty_path);
+        if (ipc < 0 || tty < 0) {
+            fprintf(stderr, "Failed to open endpoints\n");
+            exit(EXIT_FAILURE);
+        }
+        rteipc_ep_route(ipc, tty, RTEIPC_BIDIRECTIONAL);
+
+        ctx = rteipc_connect(ipc_path);
+        if (ctx < 0) {
+            fprintf(stderr, "Failed to connect socket\n");
+            exit(EXIT_FAILURE);
+        }
+
+        // write "hello" to /dev/ttyUSB0
+        rteipc_send(ctx, "hello", strlen("hello"));
+        rteipc_setcb(ctx, read_cb, NULL, NULL, 0);
+        rteipc_dispatch(NULL);
+        return 0;
+    }
+
+The above codes setup for:
+
+                          [IPC endpoint]
+                          |----------------------|   tx
+    process <-----------> | (abstract namespace) |----------|
+                 Socket   |    "@/tmp/rteipc"    |<--------||
+                          |----------------------|   rx    ||
+                                                           || bidirectional
+                          [TTY endpoint]                   ||
+                          |----------------------|   tx    ||
+     DEVICE <===========> |    "/dev/ttyUSB0"    |---------||
+           USB (Physical) |                      |<---------|
+                          |----------------------|   rx
 
 ***
-The above codes setup:
+#### gpio endpoint
 
-                           [IPC endpoint]
-                           |----------------------|   tx
-    Linux process <------> | (abstract namespace) |<---------|
-                   Socket  |    "@rteipc"         |<--------||
-                           |----------------------|   rx    ||
-                                                            || bidirectional
-                           [TTY endpoint]                   ||
-                           |----------------------|   tx    ||
-    RTOS task <----------> |   "/dev/ttyRPMSG"    |<--------||
-                 OpenAMP   |                      |<---------|
-                 (RPMsg)   |----------------------|   rx
+For hardware reset using a GPIO pin:
 
+    const char *gpio_path = "gpio://reset-sample@/dev/gpiochip3-15,out,lo";
+    int gpio = rteipc_ep_open(gpio_path);
+    struct timeval tv = {0, 100 * 1000};
 
-***
-Then we can send data:
-
+	rteipc_ep_route(ipc, gpio, RTEIPC_FORWARD);
+    rteipc_send(ctx, "1", 1); // assert high
+	rteipc_dispatch(&tv); // 100ms event loop
     ...
-    rteipc_send(ctx, "Hello", strlen("Hello"));
-    /* Run event dispatch loop */
-    rteipc_dispatch();
+
+For more examples, check demo subdirectory.
