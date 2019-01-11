@@ -7,24 +7,29 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include "rteipc.h"
+#include "list.h"
 #include "ep.h"
 
 
 #define MAX_NR_SW		16
 
+#define list_node_to_sep(n) \
+	(struct sw_ep *)((char *)(n) - (char *)&((struct sw_ep *)0)->entry)
+
 extern __thread struct event_base *__base;
 
+struct sw_ep {
+	int ep_id;
+	int ctx;
+	struct rteipc_sw *parent;
+	node_t entry;
+};
+
 struct rteipc_sw {
-	int ep_num;
 	rteipc_sw_cb handler;
 	void *data;
 	short flag;
-
-	struct sw_ep {
-		int ep_id;
-		int ctx;
-		struct rteipc_sw *parent;
-	} endpoints[MAX_NR_EP];
+	list_t ep_list;
 };
 
 static struct rteipc_sw *__sw_table[MAX_NR_SW];
@@ -93,7 +98,8 @@ static int sw_register(struct rteipc_sw *sw)
 static inline struct sw_ep *find_sw_ep(int sw_id, int ep_id)
 {
 	struct rteipc_sw *sw = NULL;
-	struct sw_ep *sep;
+	struct sw_ep *sep = NULL;
+	node_t *n;
 	int i;
 
 	pthread_mutex_lock(&sw_tbl_mutex);
@@ -104,17 +110,17 @@ static inline struct sw_ep *find_sw_ep(int sw_id, int ep_id)
 	if (!sw)
 		goto out;
 
-	for (i = 0; i < sw->ep_num; i++) {
-		if (sw->endpoints[i].ep_id == ep_id) {
-			sep = &sw->endpoints[i];
-			pthread_mutex_unlock(&sw_tbl_mutex);
-			return sep;
+	list_each(&sw->ep_list, n, {
+		struct sw_ep *e = list_node_to_sep(n);
+		if (e->ep_id == ep_id) {
+			sep = e;
+			break;
 		}
-	}
+	})
 
 out:
 	pthread_mutex_unlock(&sw_tbl_mutex);
-	return NULL;
+	return sep;
 }
 
 int rteipc_sw_evxfer(int sw_id, int ep_id, struct evbuffer *buf)
@@ -220,19 +226,19 @@ int rteipc_sw_ep_open(int sw_id)
 		goto out;
 	}
 
-	sep = &sw->endpoints[sw->ep_num];
+	sep = malloc(sizeof(*sep));
 	sep->ep_id = ret;
 	sep->parent = sw;
 	sep->ctx = rteipc_connect(path);
 	if (sep->ctx < 0) {
 		fprintf(stderr, "Failed to connect to ep=%s\n", path);
-		memset(sep, 0, sizeof(*sep));
+		free(sep);
 		ret = -1;
 		goto out;
 	}
 
+	list_push(&sw->ep_list, &sep->entry);
 	rteipc_setcb(sep->ctx, data_cb, err_cb, sep, 0);
-	sw->ep_num++;
 out:
 	pthread_mutex_unlock(&sw_tbl_mutex);
 	return ret;
@@ -249,7 +255,10 @@ int rteipc_sw(void)
 		return -1;
 	}
 
-	memset(sw, 0, sizeof(*sw));
+	sw->handler = NULL;
+	sw->data = NULL;
+	sw->flag = 0;
+	list_init(&sw->ep_list);
 
 	ret = sw_register(sw);
 	if (ret < 0) {
