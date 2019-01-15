@@ -31,7 +31,7 @@ int rteipc_setcb(int id, rteipc_read_cb read_cb, rteipc_err_cb err_cb,
 			void *arg, short flag);
 
 int rteipc_ep_open(const char *uri);
-int rteipc_ep_close(int ep_id);
+void rteipc_ep_close(int ep_id);
 int rteipc_ep_route(int ep_src, int ep_dst, int flag);
 
 int rteipc_sw(void);

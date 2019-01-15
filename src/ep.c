@@ -85,7 +85,7 @@ static void ep_unregister(int eid)
 	pthread_mutex_unlock(&ep_tbl_mutex);
 }
 
-int rteipc_ep_route(int efd1, int efd2, int flag)
+int rteipc_ep_route(int eid1, int eid2, int flag)
 {
 	struct rteipc_ep *ep1;
 	struct rteipc_ep *ep2;
@@ -100,8 +100,8 @@ int rteipc_ep_route(int efd1, int efd2, int flag)
 
 	pthread_mutex_lock(&ep_mutex);
 
-	ep1 = ep_get(efd1);
-	ep2 = ep_get(efd2);
+	ep1 = ep_get(eid1);
+	ep2 = ep_get(eid2);
 
 	if (!ep1 || !ep2) {
 		fprintf(stderr, "Invalid endpoint is specified\n");
@@ -183,19 +183,18 @@ free_ep:
 	return -1;
 }
 
-int rteipc_ep_close(int ep_id)
+void rteipc_ep_close(int eid)
 {
 	struct rteipc_ep *ep;
 
 	pthread_mutex_lock(&ep_mutex);
 
-	ep = ep_get(ep_id);
+	ep = ep_get(eid);
 	if (ep) {
-		ep_unregister(ep_id);
+		ep_unregister(eid);
 		ep->ops->unbind(ep);
 		free(ep);
 	}
 
 	pthread_mutex_unlock(&ep_mutex);
-	return 0;
 }
