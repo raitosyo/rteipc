@@ -20,9 +20,9 @@ static pthread_mutex_t ep_tbl_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t ep_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static struct rteipc_ep_ops *ep_ops_list[] = {
-	&ep_ipc,
-	&ep_tty,
-	&ep_gpio,
+	[RTEIPC_IPC]  = &ep_ipc,
+	[RTEIPC_TTY]  = &ep_tty,
+	[RTEIPC_GPIO] = &ep_gpio,
 };
 
 
