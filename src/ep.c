@@ -85,20 +85,6 @@ static void ep_unregister(int eid)
 	pthread_mutex_unlock(&ep_tbl_mutex);
 }
 
-static inline struct rteipc_ep *ep_new(int type)
-{
-	struct rteipc_ep *ep;
-	struct rteipc_ep_ops *ops = ep_ops_list[type];
-
-	ep = malloc(sizeof(*ep));
-	if (ep) {
-		ep->base = __base;
-		ep->ops = ops;
-		ep->data = NULL;
-	}
-	return ep;
-}
-
 int rteipc_ep_route(int efd1, int efd2, int flag)
 {
 	struct rteipc_ep *ep1;
@@ -168,17 +154,33 @@ int rteipc_ep_open(const char *uri)
 		return -1;
 	}
 
-	ep = ep_new(type);
-	eid = ep_register(ep);
-	if (eid < 0)
+	ep = malloc(sizeof(*ep));
+	if (!ep) {
+		fprintf(stderr, "Failed to allocate memory for ep\n");
 		return -1;
+	}
+	ep->base = __base;
+	ep->ops = ep_ops_list[type];
+	ep->data = NULL;
+
+	eid = ep_register(ep);
+	if (eid < 0) {
+		fprintf(stderr, "Failed to register ep\n");
+		goto free_ep;
+	}
 
 	if (ep->ops->bind(ep, path)) {
-		ep_unregister(eid);
-		return -1;
+		fprintf(stderr, "Failed to bind ep\n");
+		goto unreg_ep;
 	}
 
 	return eid;
+
+unreg_ep:
+	ep_unregister(eid);
+free_ep:
+	free(ep);
+	return -1;
 }
 
 int rteipc_ep_close(int ep_id)
