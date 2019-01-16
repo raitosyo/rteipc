@@ -31,6 +31,4 @@ struct rteipc_ep {
 	void *data;
 };
 
-struct rteipc_ep *rteipc_ep_get(int idx);
-
 #endif /* _RTEIPC_EP_H */
