@@ -99,12 +99,6 @@ static void listen_cb(struct evconnlistener *el, evutil_socket_t fd,
 		bufferevent_flush(data->up_read, EV_READ, BEV_FLUSH);
 }
 
-static void signal_cb(evutil_socket_t fd, short event, void *arg)
-{
-	struct rteipc_ep *self = arg;
-	event_base_loopbreak(self->base);
-}
-
 static int ipc_route(struct rteipc_ep *self, int what,
 				struct bufferevent *up_write,
 				struct bufferevent *up_read)
@@ -137,7 +131,6 @@ static int ipc_bind(struct rteipc_ep *self, const char *path)
 {
 	struct sockaddr_un addr;
 	struct ipc_data *data;
-	struct event *ev_sigint;
 	int abstract = 0;
 	int addrlen;
 
@@ -174,9 +167,6 @@ static int ipc_bind(struct rteipc_ep *self, const char *path)
 
 	evconnlistener_set_error_cb(data->el, error_cb);
 	self->data = data;
-
-	ev_sigint = evsignal_new(self->base, SIGINT, signal_cb, self);
-	event_add(ev_sigint, NULL);
 	return 0;
 }
 

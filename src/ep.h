@@ -7,7 +7,7 @@
 #include <event2/event.h>
 #include <event2/bufferevent.h>
 
-#define MAX_NR_EP		128
+#define MAX_NR_EP		(2 * DESC_BIT_WIDTH)
 
 #define RTEIPC_IPC		0
 #define RTEIPC_TTY		1

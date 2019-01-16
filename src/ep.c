@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include "rteipc.h"
+#include "table.h"
 #include "ep.h"
 
 
@@ -14,76 +15,15 @@ extern struct rteipc_ep_ops ep_ipc;
 extern struct rteipc_ep_ops ep_tty;
 extern struct rteipc_ep_ops ep_gpio;
 
-static struct rteipc_ep *__ep_table[MAX_NR_EP];
-static int __ep_index;
-static pthread_mutex_t ep_tbl_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t ep_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 static struct rteipc_ep_ops *ep_ops_list[] = {
 	[RTEIPC_IPC]  = &ep_ipc,
 	[RTEIPC_TTY]  = &ep_tty,
 	[RTEIPC_GPIO] = &ep_gpio,
 };
 
+static dtbl_t ep_tbl = DTBL_INITIALIZER(MAX_NR_EP);
+static pthread_mutex_t ep_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static inline struct rteipc_ep *ep_get(int eid)
-{
-	struct rteipc_ep *ret;
-
-	if (eid >= MAX_NR_EP)
-		return NULL;
-
-	pthread_mutex_lock(&ep_tbl_mutex);
-	ret = __ep_table[eid];
-	pthread_mutex_unlock(&ep_tbl_mutex);
-	return ret;
-}
-
-static inline int __find_next_ep(int start)
-{
-	int i;
-
-	for (i = start; i < start + MAX_NR_EP; i++) {
-		if (__ep_table[i % MAX_NR_EP] == NULL)
-			return (i % MAX_NR_EP);
-	}
-	return -1;
-}
-
-static int ep_register(struct rteipc_ep *ep)
-{
-	int eid;
-
-	pthread_mutex_lock(&ep_tbl_mutex);
-
-	eid = __find_next_ep(__ep_index);
-	if (eid < 0) {
-		pthread_mutex_unlock(&ep_tbl_mutex);
-		fprintf(stderr, "Endpoint limit(max=%d) exceeded\n",
-				MAX_NR_EP);
-		return -1;
-	}
-
-	__ep_table[eid] = ep;
-	__ep_index = eid + 1;
-
-	pthread_mutex_unlock(&ep_tbl_mutex);
-	return eid;
-}
-
-static void ep_unregister(int eid)
-{
-	int i;
-
-	if (eid >= MAX_NR_EP) {
-		fprintf(stderr, "Invalid connection id is specified\n");
-		return;
-	}
-
-	pthread_mutex_lock(&ep_tbl_mutex);
-	__ep_table[eid] = NULL;
-	pthread_mutex_unlock(&ep_tbl_mutex);
-}
 
 int rteipc_ep_route(int eid1, int eid2, int flag)
 {
@@ -100,8 +40,8 @@ int rteipc_ep_route(int eid1, int eid2, int flag)
 
 	pthread_mutex_lock(&ep_mutex);
 
-	ep1 = ep_get(eid1);
-	ep2 = ep_get(eid2);
+	ep1 = dtbl_get(&ep_tbl, eid1);
+	ep2 = dtbl_get(&ep_tbl, eid2);
 
 	if (!ep1 || !ep2) {
 		fprintf(stderr, "Invalid endpoint is specified\n");
@@ -139,7 +79,7 @@ int rteipc_ep_open(const char *uri)
 {
 	char protocol[16], path[128];
 	struct rteipc_ep *ep;
-	int type, eid;
+	int type, id;
 
 	sscanf(uri, "%[^:]://%99[^\n]", protocol, path);
 
@@ -163,8 +103,11 @@ int rteipc_ep_open(const char *uri)
 	ep->ops = ep_ops_list[type];
 	ep->data = NULL;
 
-	eid = ep_register(ep);
-	if (eid < 0) {
+	pthread_mutex_lock(&ep_mutex);
+
+	id = dtbl_set(&ep_tbl, ep);
+
+	if (id < 0) {
 		fprintf(stderr, "Failed to register ep\n");
 		goto free_ep;
 	}
@@ -174,24 +117,26 @@ int rteipc_ep_open(const char *uri)
 		goto unreg_ep;
 	}
 
-	return eid;
+	pthread_mutex_unlock(&ep_mutex);
+	return id;
 
 unreg_ep:
-	ep_unregister(eid);
+	dtbl_del(&ep_tbl, id);
 free_ep:
 	free(ep);
+	pthread_mutex_unlock(&ep_mutex);
 	return -1;
 }
 
-void rteipc_ep_close(int eid)
+void rteipc_ep_close(int id)
 {
 	struct rteipc_ep *ep;
 
 	pthread_mutex_lock(&ep_mutex);
 
-	ep = ep_get(eid);
+	ep = dtbl_get(&ep_tbl, id);
 	if (ep) {
-		ep_unregister(eid);
+		dtbl_del(&ep_tbl, id);
 		ep->ops->unbind(ep);
 		free(ep);
 	}

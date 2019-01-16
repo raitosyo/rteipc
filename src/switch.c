@@ -7,166 +7,100 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include "rteipc.h"
-#include "list.h"
+#include "table.h"
 #include "ep.h"
 
 
-#define MAX_NR_SW		16
+#define MAX_NR_SW		DESC_BIT_WIDTH
 
 #define list_node_to_sep(n) \
-	(struct sw_ep *)((char *)(n) - (char *)&((struct sw_ep *)0)->entry)
+	(struct sep *)((char *)(n) - (char *)&((struct sep *)0)->entry)
 
 extern __thread struct event_base *__base;
 
-struct sw_ep {
-	int ep_id;
+struct sep {
+	int id;
 	int ctx;
 	struct rteipc_sw *parent;
 	node_t entry;
 };
 
 struct rteipc_sw {
+	int id;
 	rteipc_sw_cb handler;
 	void *data;
 	short flag;
 	list_t ep_list;
 };
 
-static struct rteipc_sw *__sw_table[MAX_NR_SW];
-static int __sw_index;
-static pthread_mutex_t sw_tbl_mutex = PTHREAD_MUTEX_INITIALIZER;
+static dtbl_t sw_tbl = DTBL_INITIALIZER(MAX_NR_SW);
+static pthread_mutex_t sw_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
-static inline struct rteipc_sw *sw_get(int sw_id)
-{
-	struct rteipc_sw *ret;
-
-	if (sw_id >= MAX_NR_SW)
-		return NULL;
-
-	pthread_mutex_lock(&sw_tbl_mutex);
-	ret = __sw_table[sw_id];
-	pthread_mutex_unlock(&sw_tbl_mutex);
-	return ret;
-}
-
-static inline int __find_sw(struct rteipc_sw *sw)
-{
-	int i;
-
-	for (i = 0; i < MAX_NR_SW; i++) {
-		if (__sw_table[i] == sw)
-			break;
-	}
-	if (i == MAX_NR_SW)
-		return -1;
-	return i;
-}
-
-static inline int __find_next_sw(int start)
-{
-	int i;
-
-	for (i = start; i < start + MAX_NR_SW; i++) {
-		if (__sw_table[i % MAX_NR_SW] == NULL)
-			return (i % MAX_NR_SW);
-	}
-	return -1;
-}
-
-static int sw_register(struct rteipc_sw *sw)
-{
-	int sid;
-
-	pthread_mutex_lock(&sw_tbl_mutex);
-
-	sid = __find_next_sw(__sw_index);
-	if (sid < 0) {
-		pthread_mutex_unlock(&sw_tbl_mutex);
-		fprintf(stderr, "Switch limit(max=%d) exceeded\n",
-				MAX_NR_SW);
-		return -1;
-	}
-
-	__sw_table[sid] = sw;
-	__sw_index = sid + 1;
-
-	pthread_mutex_unlock(&sw_tbl_mutex);
-	return sid;
-}
-
-static inline struct sw_ep *find_sw_ep(int sw_id, int ep_id)
+static inline struct sep *__sep_find_by_id(int sid, int eid)
 {
 	struct rteipc_sw *sw = NULL;
-	struct sw_ep *sep = NULL;
+	struct sep *ret = NULL;
 	node_t *n;
 	int i;
 
-	pthread_mutex_lock(&sw_tbl_mutex);
-
-	if (sw_id < MAX_NR_SW)
-		sw = __sw_table[sw_id];
-
+	sw = dtbl_get(&sw_tbl, sid);
 	if (!sw)
 		goto out;
 
 	list_each(&sw->ep_list, n, {
-		struct sw_ep *e = list_node_to_sep(n);
-		if (e->ep_id == ep_id) {
-			sep = e;
+		struct sep *sep = list_node_to_sep(n);
+		if (sep->id == eid) {
+			ret = sep;
 			break;
 		}
 	})
 
 out:
-	pthread_mutex_unlock(&sw_tbl_mutex);
-	return sep;
+	return ret;
 }
 
-int rteipc_sw_evxfer(int sw_id, int ep_id, struct evbuffer *buf)
+int rteipc_sw_evxfer(int sid, int eid, struct evbuffer *buf)
 {
-	struct sw_ep *sep = find_sw_ep(sw_id, ep_id);
+	struct sep *sep = __sep_find_by_id(sid, eid);
 
 	if (!sep) {
-		fprintf(stderr, "Invalid sw-ep=%d is specified\n", ep_id);
+		fprintf(stderr, "Invalid sw-ep=%d is specified\n", eid);
 		return -1;
 	}
 
 	return rteipc_evsend(sep->ctx, buf);
 }
 
-int rteipc_sw_xfer(int sw_id, int ep_id, const void *data, size_t len)
+int rteipc_sw_xfer(int sid, int eid, const void *data, size_t len)
 {
 	struct evbuffer *buf = evbuffer_new();
 	int ret;
 
 	evbuffer_add(buf, data, len);
-	ret = rteipc_sw_evxfer(sw_id, ep_id, buf);
+	ret = rteipc_sw_evxfer(sid, eid, buf);
 	evbuffer_free(buf);
 	return ret;
 }
 
 static void err_cb(int ctx, short events, void *arg)
 {
-	struct sw_ep *sep = arg;
+	struct sep *sep = arg;
+	struct rteipc_sw *sw = sep->parent;
 
 	fprintf(stderr, "switch fatal error occurred\n");
-	rteipc_ep_close(sep->ep_id);
-	memset(sep, 0, sizeof(*sep));
+	list_remove(&sw->ep_list, &sep->entry);
+	rteipc_ep_close(sep->id);
+	free(sep);
 }
 
 static void data_cb(int ctx, void *data, size_t len, void *arg)
 {
-	struct sw_ep *sep = arg;
+	struct sep *sep = arg;
 	struct rteipc_sw *sw = sep->parent;
-	int sid;
-
-	pthread_mutex_lock(&sw_tbl_mutex);
-	sid = __find_sw(sw);
-	pthread_mutex_unlock(&sw_tbl_mutex);
 
 	if (sw->handler)
-		sw->handler(sid, sep->ep_id, data, len, sw->data);
+		sw->handler(sw->id, sep->id, data, len, sw->data);
 }
 
 static void rand_fname(char *out, size_t len)
@@ -181,89 +115,93 @@ static void rand_fname(char *out, size_t len)
 	out[end] = 0;
 }
 
-int rteipc_sw_setcb(int sw_id, rteipc_sw_cb handler, void *arg, short flag)
+int rteipc_sw_setcb(int id, rteipc_sw_cb handler, void *arg, short flag)
 {
-	struct rteipc_sw *sw = sw_get(sw_id);
+	struct rteipc_sw *sw = dtbl_get(&sw_tbl, id);
 
 	if (!sw) {
-		fprintf(stderr, "Invalid switch id:%d\n", sw_id);
+		fprintf(stderr, "Invalid switch id:%d\n", id);
 		return -1;
 	}
-
 	sw->handler = handler;
 	sw->data = arg;
 	sw->flag = flag;
 	return 0;
 }
 
-int rteipc_sw_ep_open(int sw_id)
+int rteipc_sw_ep_open(int id)
 {
 	const char *fmt = "ipc://@rteipc-sw%02d-%s";
 	char path[32] = {0}, fname[7];
 	struct rteipc_sw *sw = NULL;
-	struct sw_ep *sep;
+	struct sep *sep;
 	struct bufferevent *bev;
 	struct sockaddr_un addr;
-	int ret;
+	int err;
 
-	pthread_mutex_lock(&sw_tbl_mutex);
-
-	if (sw_id < MAX_NR_SW)
-		sw = __sw_table[sw_id];
-
+	sw = dtbl_get(&sw_tbl, id);
 	if (!sw) {
-		pthread_mutex_unlock(&sw_tbl_mutex);
 		fprintf(stderr, "Invalid switch id is specified\n");
 		return -1;
 	}
 
 	rand_fname(fname, sizeof(fname));
-	snprintf(path, sizeof(path), fmt, sw_id, fname);
+	snprintf(path, sizeof(path), fmt, id, fname);
 
-	ret = rteipc_ep_open(path);
-	if (ret < 0) {
+	err = rteipc_ep_open(path);
+	if (err < 0) {
 		fprintf(stderr, "Failed to create ep=%s\n", path);
 		goto out;
 	}
 
 	sep = malloc(sizeof(*sep));
-	sep->ep_id = ret;
-	sep->parent = sw;
-	sep->ctx = rteipc_connect(path);
-	if (sep->ctx < 0) {
-		fprintf(stderr, "Failed to connect to ep=%s\n", path);
-		free(sep);
-		ret = -1;
+	if (!sep) {
+		fprintf(stderr, "Failed to allocate memory for ep\n");
 		goto out;
 	}
+	sep->id = err;
+	sep->parent = sw;
+
+	err = rteipc_connect(path);
+	if (err < 0) {
+		fprintf(stderr, "Failed to connect to ep=%s\n", path);
+		free(sep);
+		goto out;
+	}
+	sep->ctx = err;
 
 	list_push(&sw->ep_list, &sep->entry);
 	rteipc_setcb(sep->ctx, data_cb, err_cb, sep, 0);
 out:
-	pthread_mutex_unlock(&sw_tbl_mutex);
-	return ret;
+	return sep->id;
 }
 
 int rteipc_sw(void)
 {
-	struct rteipc_sw *sw;
-	int ret;
+	struct rteipc_sw *sw = malloc(sizeof(*sw));
 
-	sw = malloc(sizeof(*sw));
 	if (!sw) {
-		fprintf(stderr, "Failed to create switch\n");
+		fprintf(stderr, "Failed to create sw\n");
 		return -1;
 	}
-
 	sw->handler = NULL;
 	sw->data = NULL;
 	sw->flag = 0;
 	list_init(&sw->ep_list);
 
-	ret = sw_register(sw);
-	if (ret < 0) {
-		free(sw);
-		return -1;
+	pthread_mutex_lock(&sw_mutex);
+
+	sw->id = dtbl_set(&sw_tbl, sw);
+	if (sw->id < 0) {
+		fprintf(stderr, "Failed to register sw\n");
+		goto free_sw;
 	}
-	return ret;
+
+	pthread_mutex_unlock(&sw_mutex);
+	return 0;
+
+free_sw:
+	free(sw);
+	pthread_mutex_unlock(&sw_mutex);
+	return -1;
 }

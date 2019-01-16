@@ -25,19 +25,19 @@ void rteipc_shutdown(void);
 void rteipc_dispatch(struct timeval *tv);
 
 int rteipc_connect(const char *uri);
-int rteipc_send(int id, const void *data, size_t len);
-int rteipc_evsend(int id, struct evbuffer *buf);
-int rteipc_setcb(int id, rteipc_read_cb read_cb, rteipc_err_cb err_cb,
+int rteipc_send(int cid, const void *data, size_t len);
+int rteipc_evsend(int cid, struct evbuffer *buf);
+int rteipc_setcb(int cid, rteipc_read_cb read_cb, rteipc_err_cb err_cb,
 			void *arg, short flag);
 
 int rteipc_ep_open(const char *uri);
-void rteipc_ep_close(int ep_id);
-int rteipc_ep_route(int ep_src, int ep_dst, int flag);
+void rteipc_ep_close(int eid);
+int rteipc_ep_route(int src, int dst, int flag);
 
 int rteipc_sw(void);
-int rteipc_sw_ep_open(int sw_id);
-int rteipc_sw_xfer(int sw_id, int ep_id, const void *data, size_t len);
-int rteipc_sw_evxfer(int sw_id, int ep_id, struct evbuffer *buf);
-int rteipc_sw_setcb(int sw_id, rteipc_sw_cb handler, void *arg, short flag);
+int rteipc_sw_ep_open(int sid);
+int rteipc_sw_xfer(int sid, int eid, const void *data, size_t len);
+int rteipc_sw_evxfer(int sid, int eid, struct evbuffer *buf);
+int rteipc_sw_setcb(int sid, rteipc_sw_cb handler, void *arg, short flag);
 
 #endif /* _RTEIPC_H */
