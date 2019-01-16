@@ -7,12 +7,14 @@ set(RTEIPC_SOURCES
     ep.h
     message.h
     list.h
+    table.h
 
     base.c
     connect.c
     switch.c
     message.c
     list.c
+    table.c
     ep.c
     ep/ep_ipc.c
     ep/ep_tty.c
