@@ -36,6 +36,7 @@ int rteipc_ep_route(int src, int dst, int flag);
 
 int rteipc_sw(void);
 int rteipc_sw_ep_open(int sid);
+void rteipc_sw_ep_close(int sid, int eid);
 int rteipc_sw_xfer(int sid, int eid, const void *data, size_t len);
 int rteipc_sw_evxfer(int sid, int eid, struct evbuffer *buf);
 int rteipc_sw_setcb(int sid, rteipc_sw_cb handler, void *arg, short flag);
