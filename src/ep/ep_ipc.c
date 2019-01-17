@@ -25,6 +25,9 @@ struct ipc_data {
 	int abstract;
 };
 
+static void listen_cb(struct evconnlistener *, evutil_socket_t,
+				struct sockaddr *, int, void *);
+
 static void event_cb(struct bufferevent *bev, short events, void *arg)
 {
 	struct rteipc_ep *self = arg;
@@ -39,7 +42,7 @@ static void event_cb(struct bufferevent *bev, short events, void *arg)
 	bufferevent_free(bev);
 	data->down = NULL;
 	/* accept another connection again */
-	evconnlistener_enable(data->el);
+	evconnlistener_set_cb(data->el, listen_cb, (void *)self);
 }
 
 static void upstream(struct bufferevent *bev, void *arg)
@@ -90,7 +93,7 @@ static void listen_cb(struct evconnlistener *el, evutil_socket_t fd,
 	}
 
 	/* accept only one connection */
-	evconnlistener_disable(el);
+	evconnlistener_set_cb(el, NULL, NULL);
 
 	bufferevent_setcb(bev, upstream, NULL, event_cb, self);
 	bufferevent_enable(bev, EV_READ);
