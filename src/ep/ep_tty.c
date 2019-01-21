@@ -22,7 +22,6 @@
 
 
 struct tty_data {
-	struct bufferevent *up_read, *up_write;
 	int down_fd;
 	struct event *ev;
 };
@@ -36,7 +35,7 @@ static void upstream(evutil_socket_t fd, short what, void *arg)
 	size_t len, nl;
 	int ret;
 
-	if (!data->up_write)
+	if (!self->bev)
 		return;
 
 	len = read(fd, msg, sizeof(msg));
@@ -54,30 +53,7 @@ static void upstream(evutil_socket_t fd, short what, void *arg)
 	len = evbuffer_get_length(buf);
 	nl = htonl(len);
 	evbuffer_prepend(buf, &nl, 4);
-	bufferevent_write_buffer(data->up_write, buf);
-}
-
-static void downstream(struct bufferevent *bev, void *arg)
-{
-	struct rteipc_ep *self = arg;
-	struct tty_data *data = self->data;
-	struct evbuffer *in = bufferevent_get_input(bev);
-	char *msg;
-	size_t len;
-	int ret;
-
-	for (;;) {
-		if (!(ret = rteipc_msg_drain(in, &len, &msg)))
-			return;
-
-		if (ret < 0) {
-			fprintf(stderr, "Error reading data\n");
-			return;
-		}
-
-		rteipc_msg_write(data->down_fd, msg, len);
-		free(msg);
-	}
+	bufferevent_write_buffer(self->bev, buf);
 }
 
 static int open_uart(char const *path, int speed)
@@ -117,32 +93,26 @@ static int open_uart(char const *path, int speed)
 	return fd;
 }
 
-static int tty_route(struct rteipc_ep *self, int what,
-				struct bufferevent *up_write,
-				struct bufferevent *up_read)
+static void tty_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 {
 	struct tty_data *data = self->data;
+	struct evbuffer *in = bufferevent_get_input(bev);
+	char *msg;
+	size_t len;
+	int ret;
 
-	if (what == RTEIPC_ROUTE_ADD) {
-		if (up_write)
-			data->up_write = up_write;
-		if (up_read) {
-			data->up_read = up_read;
-			bufferevent_setcb(up_read, downstream,
-						NULL, NULL, self);
-			bufferevent_enable(up_read, EV_READ);
+	for (;;) {
+		if (!(ret = rteipc_msg_drain(in, &len, &msg)))
+			return;
+
+		if (ret < 0) {
+			fprintf(stderr, "Error reading data\n");
+			return;
 		}
-	} else if (what == RTEIPC_ROUTE_DEL) {
-		if (data->up_write == up_write) {
-			bufferevent_free(up_write);
-			data->up_write = NULL;
-		}
-		if (data->up_read == up_read) {
-			bufferevent_free(up_read);
-			data->up_read = NULL;
-		}
+
+		rteipc_msg_write(data->down_fd, msg, len);
+		free(msg);
 	}
-	return 0;
 }
 
 static int tty_bind(struct rteipc_ep *self, const char *path)
@@ -201,7 +171,7 @@ static void tty_unbind(struct rteipc_ep *self)
 }
 
 struct rteipc_ep_ops ep_tty = {
-	.route = tty_route,
+	.on_data = tty_on_data,
 	.bind = tty_bind,
 	.unbind = tty_unbind,
 };

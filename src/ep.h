@@ -13,20 +13,18 @@
 #define RTEIPC_TTY		1
 #define RTEIPC_GPIO		2
 
-#define RTEIPC_ROUTE_ADD	0
-#define RTEIPC_ROUTE_DEL	1
 
 struct rteipc_ep;
 
 struct rteipc_ep_ops {
 	int (*bind)(struct rteipc_ep *self, const char *path);
 	void (*unbind)(struct rteipc_ep *self);
-	int (*route)(struct rteipc_ep *self, int what,
-			struct bufferevent *up, struct bufferevent *down);
+	void (*on_data)(struct rteipc_ep *self, struct bufferevent *bev);
 };
 
 struct rteipc_ep {
 	struct event_base *base;
+	struct bufferevent *bev;
 	struct rteipc_ep_ops *ops;
 	void *data;
 };

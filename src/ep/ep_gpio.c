@@ -27,7 +27,6 @@ struct gpio_data {
 	struct gpiod_line *line;
 	int out;
 	struct event *ev;
-	struct bufferevent *up_read, *up_write;
 };
 
 static void upstream(evutil_socket_t fd, short what, void *arg)
@@ -44,6 +43,9 @@ static void upstream(evutil_socket_t fd, short what, void *arg)
 		goto err;
 	}
 
+	if (!self->bev)
+		return;
+
 	val = gpiod_line_get_value(data->line);
 	if (val < 0) {
 		fprintf(stderr, "Error reading gpio value\n");
@@ -53,7 +55,7 @@ static void upstream(evutil_socket_t fd, short what, void *arg)
 	evbuffer_add(buf, val ? "1" : "0", 1);
 	nl = htonl(1);
 	evbuffer_prepend(buf, &nl, 4);
-	bufferevent_write_buffer(data->up_write, buf);
+	bufferevent_write_buffer(self->bev, buf);
 	return;
 
 err:
@@ -61,9 +63,8 @@ err:
 	return;
 }
 
-static void downstream(struct bufferevent *bev, void *arg)
+static void gpio_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 {
-	struct rteipc_ep *self = arg;
 	struct gpio_data *data = self->data;
 	struct evbuffer *in = bufferevent_get_input(bev);
 	char *msg;
@@ -92,40 +93,6 @@ static void downstream(struct bufferevent *bev, void *arg)
 		}
 		free(msg);
 	}
-}
-
-static int gpio_route(struct rteipc_ep *self, int what,
-				struct bufferevent *up_write,
-				struct bufferevent *up_read)
-{
-	struct gpio_data *data = self->data;
-
-	if (what == RTEIPC_ROUTE_ADD) {
-		if (up_write)
-			data->up_write = up_write;
-		if (up_read) {
-			if (!data->out) {
-				fprintf(stderr,
-					"Warn: cannot set "
-					"RTEIPC_FORWARD to gpio input\n");
-				return -1;
-			}
-			data->up_read = up_read;
-			bufferevent_setcb(up_read, downstream,
-						NULL, NULL, self);
-			bufferevent_enable(up_read, EV_READ);
-		}
-	} else if (what == RTEIPC_ROUTE_DEL) {
-		if (data->up_write == up_write) {
-			bufferevent_free(up_write);
-			data->up_write = NULL;
-		}
-		if (data->up_read == up_read) {
-			bufferevent_free(up_read);
-			data->up_read = NULL;
-		}
-	}
-	return 0;
 }
 
 static int gpio_bind(struct rteipc_ep *self, const char *path)
@@ -215,7 +182,7 @@ static void gpio_unbind(struct rteipc_ep *self)
 }
 
 struct rteipc_ep_ops ep_gpio = {
-	.route = gpio_route,
+	.on_data = gpio_on_data,
 	.bind = gpio_bind,
 	.unbind = gpio_unbind,
 };

@@ -20,7 +20,7 @@
 
 struct ipc_data {
 	struct evconnlistener *el;
-	struct bufferevent *up_read, *up_write, *down;
+	struct bufferevent *cli;
 	char *path;
 	int abstract;
 };
@@ -40,33 +40,18 @@ static void event_cb(struct bufferevent *bev, short events, void *arg)
 				strerror(errno));
 	}
 	bufferevent_free(bev);
-	data->down = NULL;
+	data->cli = NULL;
 	/* accept another connection again */
 	evconnlistener_set_cb(data->el, listen_cb, (void *)self);
 }
 
-static void upstream(struct bufferevent *bev, void *arg)
+static void read_cb(struct bufferevent *bev, void *arg)
 {
 	struct rteipc_ep *self = arg;
-	struct ipc_data *data = self->data;
 
-	if (!data->up_write)
-		return;
-
-	evbuffer_add_buffer(bufferevent_get_output(data->up_write),
-			bufferevent_get_input(bev));
-}
-
-static void downstream(struct bufferevent *bev, void *arg)
-{
-	struct rteipc_ep *self = arg;
-	struct ipc_data *data = self->data;
-
-	if (!data->down)
-		return;
-
-	evbuffer_add_buffer(bufferevent_get_output(data->down),
-			bufferevent_get_input(bev));
+	if (self->bev)
+		evbuffer_add_buffer(bufferevent_get_output(self->bev),
+				bufferevent_get_input(bev));
 }
 
 static void error_cb(struct evconnlistener *el, void *arg)
@@ -95,39 +80,22 @@ static void listen_cb(struct evconnlistener *el, evutil_socket_t fd,
 	/* accept only one connection */
 	evconnlistener_set_cb(el, NULL, NULL);
 
-	bufferevent_setcb(bev, upstream, NULL, event_cb, self);
+	bufferevent_setcb(bev, read_cb, NULL, event_cb, self);
 	bufferevent_enable(bev, EV_READ);
-	data->down = bev;
-	if (data->up_read)
-		bufferevent_flush(data->up_read, EV_READ, BEV_FLUSH);
+	data->cli = bev;
+	if (self->bev)
+		bufferevent_flush(self->bev, EV_READ, BEV_FLUSH);
 }
 
-static int ipc_route(struct rteipc_ep *self, int what,
-				struct bufferevent *up_write,
-				struct bufferevent *up_read)
+static void ipc_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 {
 	struct ipc_data *data = self->data;
 
-	if (what == RTEIPC_ROUTE_ADD) {
-		if (up_write)
-			data->up_write = up_write;
-		if (up_read) {
-			data->up_read = up_read;
-			bufferevent_setcb(up_read, downstream,
-						NULL, NULL, self);
-			bufferevent_enable(up_read, EV_READ);
-		}
-	} else if (what == RTEIPC_ROUTE_DEL) {
-		if (data->up_write == up_write) {
-			bufferevent_free(up_write);
-			data->up_write = NULL;
-		}
-		if (data->up_read == up_read) {
-			bufferevent_free(up_read);
-			data->up_read = NULL;
-		}
-	}
-	return 0;
+	if (!data->cli)
+		return;
+
+	evbuffer_add_buffer(bufferevent_get_output(data->cli),
+			bufferevent_get_input(bev));
 }
 
 static int ipc_bind(struct rteipc_ep *self, const char *path)
@@ -177,18 +145,8 @@ static void ipc_unbind(struct rteipc_ep *self)
 {
 	struct ipc_data *data = self->data;
 
-	if (data->up_read == data->up_write) {
-		if (data->up_read)
-			bufferevent_free(data->up_read);
-	} else {
-		if (data->up_read)
-			bufferevent_free(data->up_read);
-		if (data->up_write)
-			bufferevent_free(data->up_write);
-	}
-
-	if (data->down)
-		bufferevent_free(data->down);
+	if (data->cli)
+		bufferevent_free(data->cli);
 
 	evconnlistener_free(data->el);
 
@@ -199,7 +157,7 @@ static void ipc_unbind(struct rteipc_ep *self)
 }
 
 struct rteipc_ep_ops ep_ipc = {
-	.route = ipc_route,
+	.on_data = ipc_on_data,
 	.bind = ipc_bind,
 	.unbind = ipc_unbind,
 };

@@ -8,11 +8,10 @@
 #include <event2/event.h>
 #include <event2/buffer.h>
 
-#define RTEIPC_FORWARD		1
-#define RTEIPC_REVERSE		2
-#define RTEIPC_BIDIRECTIONAL  (RTEIPC_FORWARD | RTEIPC_REVERSE)
+#define RTEIPC_ROUTE_ADD		1
+#define RTEIPC_ROUTE_DEL		2
 
-#define RTEIPC_NO_EXIT_ON_ERR	(1 << 0)
+#define RTEIPC_NO_EXIT_ON_ERR		(1 << 0)
 
 typedef void (*rteipc_read_cb)(int ctx, void *data, size_t len, void *arg);
 typedef void (*rteipc_err_cb)(int ctx, short events, void *arg);

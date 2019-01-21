@@ -25,54 +25,81 @@ static dtbl_t ep_tbl = DTBL_INITIALIZER(MAX_NR_EP);
 static pthread_mutex_t ep_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
-int rteipc_ep_route(int eid1, int eid2, int flag)
+static void ep_read_cb(struct bufferevent *bev, void *arg)
 {
-	struct rteipc_ep *ep1;
-	struct rteipc_ep *ep2;
-	struct bufferevent *pair[2];
-	struct bufferevent *ep1_up, *ep1_dn, *ep2_up, *ep2_dn;
-	int ret = 0;
+	int id = (intptr_t)arg;
+	struct rteipc_ep *ep;
 
-	if (!(flag & RTEIPC_FORWARD) && !(flag & RTEIPC_REVERSE)) {
-		fprintf(stderr, "Invalid route direction\n");
+	pthread_mutex_lock(&ep_mutex);
+
+	ep = dtbl_get(&ep_tbl, id);
+	if (ep && ep->ops->on_data)
+		ep->ops->on_data(ep, bev);
+
+	pthread_mutex_unlock(&ep_mutex);
+}
+
+int rteipc_ep_route(int a, int b, int flag)
+{
+	struct rteipc_ep *ea, *eb;
+	struct bufferevent *pair[2];
+
+	if (bufferevent_pair_new(__base, 0, pair)) {
+		fprintf(stderr, "Failed to allocate a socket pair\n");
 		return -1;
 	}
 
 	pthread_mutex_lock(&ep_mutex);
 
-	ep1 = dtbl_get(&ep_tbl, eid1);
-	ep2 = dtbl_get(&ep_tbl, eid2);
+	ea = dtbl_get(&ep_tbl, a);
+	eb = dtbl_get(&ep_tbl, b);
 
-	if (!ep1 || !ep2) {
+	if (!ea || !eb) {
 		fprintf(stderr, "Invalid endpoint is specified\n");
-		ret = -1;
-		goto out;
+		goto err;
 	}
 
-	if (bufferevent_pair_new(__base, 0, pair)) {
-		fprintf(stderr, "Failed to allocate memory for socket pair\n");
-		ret = -1;
-		goto out;
+	switch (flag) {
+	case RTEIPC_ROUTE_ADD:
+		if (ea->bev || eb->bev) {
+			fprintf(stderr, "One of endpoints is busy\n");
+			goto err;
+		}
+		ea->bev = pair[0];
+		eb->bev = pair[1];
+		bufferevent_setcb(ea->bev, ep_read_cb, NULL, NULL,
+					(void *)(intptr_t)a);
+		bufferevent_setcb(eb->bev, ep_read_cb, NULL, NULL,
+					(void *)(intptr_t)b);
+		bufferevent_enable(ea->bev, EV_READ);
+		bufferevent_enable(eb->bev, EV_READ);
+		break;
+	case RTEIPC_ROUTE_DEL:
+		if (!ea->bev || !eb->bev) {
+			fprintf(stderr, "No route found\n");
+			goto err;
+		}
+		if (ea->bev != bufferevent_pair_get_partner(eb->bev)) {
+			fprintf(stderr,
+				"endpoints are not routed each other\n");
+			goto err;
+		}
+		bufferevent_free(ea->bev);
+		bufferevent_free(eb->bev);
+		ea->bev = NULL;
+		eb->bev = NULL;
+		break;
+	defalut:
+		fprintf(stderr, "Invalid route flag\n");
+		break;
 	}
 
-	if (flag == RTEIPC_BIDIRECTIONAL) {
-		ep1_up = ep1_dn = pair[0];
-		ep2_up = ep2_dn = pair[1];
-	} else if (flag == RTEIPC_FORWARD) {
-		ep1_up = pair[0];
-		ep2_dn = pair[1];
-		ep1_dn = ep2_up = NULL;
-	} else if (flag == RTEIPC_REVERSE) {
-		ep1_dn = pair[0];
-		ep2_up = pair[1];
-		ep1_up = ep2_dn = NULL;
-	}
-	ep1->ops->route(ep1, RTEIPC_ROUTE_ADD, ep1_up, ep1_dn);
-	ep2->ops->route(ep2, RTEIPC_ROUTE_ADD, ep2_up, ep2_dn);
-
-out:
 	pthread_mutex_unlock(&ep_mutex);
-	return ret;
+	return 0;
+
+err:
+	pthread_mutex_unlock(&ep_mutex);
+	return -1;
 }
 
 int rteipc_ep_open(const char *uri)
@@ -101,6 +128,7 @@ int rteipc_ep_open(const char *uri)
 	}
 	ep->base = __base;
 	ep->ops = ep_ops_list[type];
+	ep->bev = NULL;
 	ep->data = NULL;
 
 	pthread_mutex_lock(&ep_mutex);
@@ -138,6 +166,11 @@ void rteipc_ep_close(int id)
 	if (ep) {
 		dtbl_del(&ep_tbl, id);
 		ep->ops->unbind(ep);
+		if (ep->bev) {
+			bufferevent_free(bufferevent_pair_get_partner(
+						ep->bev));
+			bufferevent_free(ep->bev);
+		}
 		free(ep);
 	}
 
