@@ -15,6 +15,12 @@ extern struct rteipc_ep_ops ep_ipc;
 extern struct rteipc_ep_ops ep_tty;
 extern struct rteipc_ep_ops ep_gpio;
 
+struct ep_core {
+	int id;
+	int partner;
+	struct rteipc_ep *ep;
+};
+
 static struct rteipc_ep_ops *ep_ops_list[] = {
 	[RTEIPC_IPC]  = &ep_ipc,
 	[RTEIPC_TTY]  = &ep_tty,
@@ -28,40 +34,42 @@ static pthread_mutex_t ep_mutex = PTHREAD_MUTEX_INITIALIZER;
 static void ep_read_cb(struct bufferevent *bev, void *arg)
 {
 	int id = (intptr_t)arg;
+	struct ep_core *core;
 	struct rteipc_ep *ep;
 
 	pthread_mutex_lock(&ep_mutex);
 
-	ep = dtbl_get(&ep_tbl, id);
+	core = dtbl_get(&ep_tbl, id);
+	ep = core->ep;
 	if (ep && ep->ops->on_data)
 		ep->ops->on_data(ep, bev);
 
 	pthread_mutex_unlock(&ep_mutex);
 }
 
-static int do_ep_bind(int a, int b, int bind)
+static int __do_ep_bind(int a, int b, int bind)
 {
+	struct ep_core *ca, *cb;
 	struct rteipc_ep *ea, *eb;
 	struct bufferevent *pair[2];
 
-	pthread_mutex_lock(&ep_mutex);
-
-	ea = dtbl_get(&ep_tbl, a);
-	eb = dtbl_get(&ep_tbl, b);
-
-	if (!ea || !eb) {
+	ca = dtbl_get(&ep_tbl, a);
+	cb = dtbl_get(&ep_tbl, b);
+	if (!ca || !cb) {
 		fprintf(stderr, "Invalid endpoint is specified\n");
-		goto err;
+		return -1;
 	}
 
+	ea = ca->ep;
+	eb = cb->ep;
 	if (bind) {
 		if (ea->bev || eb->bev) {
 			fprintf(stderr, "One of endpoints is busy\n");
-			goto err;
+			return -1;
 		}
 		if (bufferevent_pair_new(__base, 0, pair)) {
 			fprintf(stderr, "Failed to allocate a socket pair\n");
-			goto err;
+			return -1;
 		}
 		ea->bev = pair[0];
 		eb->bev = pair[1];
@@ -71,41 +79,54 @@ static int do_ep_bind(int a, int b, int bind)
 					(void *)(intptr_t)b);
 		bufferevent_enable(ea->bev, EV_READ);
 		bufferevent_enable(eb->bev, EV_READ);
+		ca->partner = cb->id;
+		cb->partner = ca->id;
 	} else {
 		if (!ea->bev || !eb->bev ||
 		    ea->bev != bufferevent_pair_get_partner(eb->bev)
 		) {
 			fprintf(stderr,
 				"endpoints are not bound\n");
-			goto err;
+			return -1;
 		}
 		bufferevent_free(ea->bev);
 		bufferevent_free(eb->bev);
 		ea->bev = NULL;
 		eb->bev = NULL;
+		ca->partner = -1;
+		cb->partner = -1;
 	}
-
-	pthread_mutex_unlock(&ep_mutex);
 	return 0;
-
-err:
-	pthread_mutex_unlock(&ep_mutex);
-	return -1;
 }
 
 int rteipc_ep_bind(int a, int b)
 {
-	return do_ep_bind(a, b, 1);
+	int ret;
+
+	pthread_mutex_lock(&ep_mutex);
+
+	ret = __do_ep_bind(a, b, 1);
+
+	pthread_mutex_unlock(&ep_mutex);
+	return ret;
 }
 
 int rteipc_ep_unbind(int a, int b)
 {
-	return do_ep_bind(a, b, 0);
+	int ret;
+
+	pthread_mutex_lock(&ep_mutex);
+
+	ret = __do_ep_bind(a, b, 0);
+
+	pthread_mutex_unlock(&ep_mutex);
+	return ret;
 }
 
 int rteipc_ep_open(const char *uri)
 {
 	char protocol[16], path[128];
+	struct ep_core *core;
 	struct rteipc_ep *ep;
 	int type, id;
 
@@ -122,24 +143,32 @@ int rteipc_ep_open(const char *uri)
 		return -1;
 	}
 
-	ep = malloc(sizeof(*ep));
-	if (!ep) {
-		fprintf(stderr, "Failed to allocate memory for ep\n");
+	core = malloc(sizeof(*core));
+	if (!core) {
+		fprintf(stderr, "Failed to allocate memory for core\n");
 		return -1;
+	}
+	core->partner = -1;
+
+	ep = malloc(sizeof(*ep));
+	if (!core) {
+		fprintf(stderr, "Failed to allocate memory for ep\n");
+		goto free_core;
 	}
 	ep->base = __base;
 	ep->ops = ep_ops_list[type];
 	ep->bev = NULL;
 	ep->data = NULL;
+	core->ep = ep;
 
 	pthread_mutex_lock(&ep_mutex);
 
-	id = dtbl_set(&ep_tbl, ep);
-
+	id = dtbl_set(&ep_tbl, core);
 	if (id < 0) {
 		fprintf(stderr, "Failed to register ep\n");
 		goto free_ep;
 	}
+	core->id = id;
 
 	if (ep->ops->open(ep, path)) {
 		fprintf(stderr, "Failed to open ep\n");
@@ -153,26 +182,28 @@ unreg_ep:
 	dtbl_del(&ep_tbl, id);
 free_ep:
 	free(ep);
+free_core:
+	free(core);
 	pthread_mutex_unlock(&ep_mutex);
 	return -1;
 }
 
 void rteipc_ep_close(int id)
 {
+	struct ep_core *core;
 	struct rteipc_ep *ep;
 
 	pthread_mutex_lock(&ep_mutex);
 
-	ep = dtbl_get(&ep_tbl, id);
-	if (ep) {
-		dtbl_del(&ep_tbl, id);
+	core = dtbl_get(&ep_tbl, id);
+	if (core && core->ep) {
+		dtbl_del(&ep_tbl, core->id);
+		ep = core->ep;
 		ep->ops->close(ep);
-		if (ep->bev) {
-			bufferevent_free(bufferevent_pair_get_partner(
-						ep->bev));
-			bufferevent_free(ep->bev);
-		}
+		if (core->partner >= 0)
+			__do_ep_bind(core->id, core->partner, 0);
 		free(ep);
+		free(core);
 	}
 
 	pthread_mutex_unlock(&ep_mutex);
