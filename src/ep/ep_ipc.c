@@ -98,7 +98,7 @@ static void ipc_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 			bufferevent_get_input(bev));
 }
 
-static int ipc_bind(struct rteipc_ep *self, const char *path)
+static int ipc_open(struct rteipc_ep *self, const char *path)
 {
 	struct sockaddr_un addr;
 	struct ipc_data *data;
@@ -141,7 +141,7 @@ static int ipc_bind(struct rteipc_ep *self, const char *path)
 	return 0;
 }
 
-static void ipc_unbind(struct rteipc_ep *self)
+static void ipc_close(struct rteipc_ep *self)
 {
 	struct ipc_data *data = self->data;
 
@@ -158,6 +158,6 @@ static void ipc_unbind(struct rteipc_ep *self)
 
 struct rteipc_ep_ops ep_ipc = {
 	.on_data = ipc_on_data,
-	.bind = ipc_bind,
-	.unbind = ipc_unbind,
+	.open = ipc_open,
+	.close = ipc_close,
 };

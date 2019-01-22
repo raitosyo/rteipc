@@ -115,7 +115,7 @@ static void tty_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 	}
 }
 
-static int tty_bind(struct rteipc_ep *self, const char *path)
+static int tty_open(struct rteipc_ep *self, const char *path)
 {
 	struct tty_data *data;
 	struct event *ev;
@@ -150,7 +150,7 @@ static int tty_bind(struct rteipc_ep *self, const char *path)
 	memset(data, 0, sizeof(*data));
 	fd = open_uart(dev, speed);
 	if (fd < 0) {
-		fprintf(stderr, "Failed to bind tty\n");
+		fprintf(stderr, "Failed to open tty\n");
 		return -1;
 	}
 
@@ -163,7 +163,7 @@ static int tty_bind(struct rteipc_ep *self, const char *path)
 	return 0;
 }
 
-static void tty_unbind(struct rteipc_ep *self)
+static void tty_close(struct rteipc_ep *self)
 {
 	struct tty_data *data = self->data;
 	event_del(data->ev);
@@ -172,6 +172,6 @@ static void tty_unbind(struct rteipc_ep *self)
 
 struct rteipc_ep_ops ep_tty = {
 	.on_data = tty_on_data,
-	.bind = tty_bind,
-	.unbind = tty_unbind,
+	.open = tty_open,
+	.close = tty_close,
 };

@@ -61,7 +61,7 @@ static void broker(const char *uri1, const char *uri2)
 		fprintf(stderr, "Failed to open endpoints\n");
 		return;
 	}
-	rteipc_ep_route(ep1, ep2, RTEIPC_ROUTE_ADD);
+	rteipc_ep_bind(ep1, ep2);
 	rteipc_dispatch(NULL);
 	rteipc_shutdown();
 }

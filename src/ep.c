@@ -39,15 +39,10 @@ static void ep_read_cb(struct bufferevent *bev, void *arg)
 	pthread_mutex_unlock(&ep_mutex);
 }
 
-int rteipc_ep_route(int a, int b, int flag)
+static int do_ep_bind(int a, int b, int bind)
 {
 	struct rteipc_ep *ea, *eb;
 	struct bufferevent *pair[2];
-
-	if (bufferevent_pair_new(__base, 0, pair)) {
-		fprintf(stderr, "Failed to allocate a socket pair\n");
-		return -1;
-	}
 
 	pthread_mutex_lock(&ep_mutex);
 
@@ -59,10 +54,13 @@ int rteipc_ep_route(int a, int b, int flag)
 		goto err;
 	}
 
-	switch (flag) {
-	case RTEIPC_ROUTE_ADD:
+	if (bind) {
 		if (ea->bev || eb->bev) {
 			fprintf(stderr, "One of endpoints is busy\n");
+			goto err;
+		}
+		if (bufferevent_pair_new(__base, 0, pair)) {
+			fprintf(stderr, "Failed to allocate a socket pair\n");
 			goto err;
 		}
 		ea->bev = pair[0];
@@ -73,25 +71,18 @@ int rteipc_ep_route(int a, int b, int flag)
 					(void *)(intptr_t)b);
 		bufferevent_enable(ea->bev, EV_READ);
 		bufferevent_enable(eb->bev, EV_READ);
-		break;
-	case RTEIPC_ROUTE_DEL:
-		if (!ea->bev || !eb->bev) {
-			fprintf(stderr, "No route found\n");
-			goto err;
-		}
-		if (ea->bev != bufferevent_pair_get_partner(eb->bev)) {
+	} else {
+		if (!ea->bev || !eb->bev ||
+		    ea->bev != bufferevent_pair_get_partner(eb->bev)
+		) {
 			fprintf(stderr,
-				"endpoints are not routed each other\n");
+				"endpoints are not bound\n");
 			goto err;
 		}
 		bufferevent_free(ea->bev);
 		bufferevent_free(eb->bev);
 		ea->bev = NULL;
 		eb->bev = NULL;
-		break;
-	defalut:
-		fprintf(stderr, "Invalid route flag\n");
-		break;
 	}
 
 	pthread_mutex_unlock(&ep_mutex);
@@ -100,6 +91,16 @@ int rteipc_ep_route(int a, int b, int flag)
 err:
 	pthread_mutex_unlock(&ep_mutex);
 	return -1;
+}
+
+int rteipc_ep_bind(int a, int b)
+{
+	return do_ep_bind(a, b, 1);
+}
+
+int rteipc_ep_unbind(int a, int b)
+{
+	return do_ep_bind(a, b, 0);
 }
 
 int rteipc_ep_open(const char *uri)
@@ -140,8 +141,8 @@ int rteipc_ep_open(const char *uri)
 		goto free_ep;
 	}
 
-	if (ep->ops->bind(ep, path)) {
-		fprintf(stderr, "Failed to bind ep\n");
+	if (ep->ops->open(ep, path)) {
+		fprintf(stderr, "Failed to open ep\n");
 		goto unreg_ep;
 	}
 
@@ -165,7 +166,7 @@ void rteipc_ep_close(int id)
 	ep = dtbl_get(&ep_tbl, id);
 	if (ep) {
 		dtbl_del(&ep_tbl, id);
-		ep->ops->unbind(ep);
+		ep->ops->close(ep);
 		if (ep->bev) {
 			bufferevent_free(bufferevent_pair_get_partner(
 						ep->bev));

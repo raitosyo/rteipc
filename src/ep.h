@@ -17,8 +17,8 @@
 struct rteipc_ep;
 
 struct rteipc_ep_ops {
-	int (*bind)(struct rteipc_ep *self, const char *path);
-	void (*unbind)(struct rteipc_ep *self);
+	int (*open)(struct rteipc_ep *self, const char *path);
+	void (*close)(struct rteipc_ep *self);
 	void (*on_data)(struct rteipc_ep *self, struct bufferevent *bev);
 };
 

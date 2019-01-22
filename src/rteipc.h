@@ -8,9 +8,6 @@
 #include <event2/event.h>
 #include <event2/buffer.h>
 
-#define RTEIPC_ROUTE_ADD		1
-#define RTEIPC_ROUTE_DEL		2
-
 #define RTEIPC_NO_EXIT_ON_ERR		(1 << 0)
 
 typedef void (*rteipc_read_cb)(int ctx, void *data, size_t len, void *arg);
@@ -31,7 +28,8 @@ int rteipc_setcb(int cid, rteipc_read_cb read_cb, rteipc_err_cb err_cb,
 
 int rteipc_ep_open(const char *uri);
 void rteipc_ep_close(int eid);
-int rteipc_ep_route(int src, int dst, int flag);
+int rteipc_ep_bind(int ep_a, int ep_b);
+int rteipc_ep_unbind(int ep_a, int ep_b);
 
 int rteipc_sw(void);
 int rteipc_sw_ep_open(int sid);

@@ -87,7 +87,7 @@ static void broker(const char *uri1, const char *uri2, const char *uri3)
 	rteipc_sw_setcb(sw, swep_cb, NULL, 0);
 	for (i = 0; i < 3; i++) {
 		sw_ep[i] = rteipc_sw_ep_open(sw);
-		rteipc_ep_route(ep[i], sw_ep[i], RTEIPC_ROUTE_ADD);
+		rteipc_ep_bind(ep[i], sw_ep[i]);
 	}
 
 	rteipc_dispatch(NULL);

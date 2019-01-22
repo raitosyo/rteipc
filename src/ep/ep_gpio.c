@@ -95,7 +95,7 @@ static void gpio_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 	}
 }
 
-static int gpio_bind(struct rteipc_ep *self, const char *path)
+static int gpio_open(struct rteipc_ep *self, const char *path)
 {
 	struct gpiod_chip *chip;
 	struct gpiod_line *line;
@@ -175,7 +175,7 @@ free_data:
 	return -1;
 }
 
-static void gpio_unbind(struct rteipc_ep *self)
+static void gpio_close(struct rteipc_ep *self)
 {
 	struct gpio_data *data = self->data;
 	event_del(data->ev);
@@ -183,6 +183,6 @@ static void gpio_unbind(struct rteipc_ep *self)
 
 struct rteipc_ep_ops ep_gpio = {
 	.on_data = gpio_on_data,
-	.bind = gpio_bind,
-	.unbind = gpio_unbind,
+	.open = gpio_open,
+	.close = gpio_close,
 };
