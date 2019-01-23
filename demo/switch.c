@@ -3,21 +3,21 @@
 
 /*
   (terminal-1)
-  $ ./broadcast -b ipc://@/tmp/ipc{1,2,3}
+  $ ./switch -b ipc://@/tmp/ipc{1,2,3}
   broker start!
 
   (terminal-2)
-  $ ./broadcast -p ipc://@/tmp/ipc1 foo
+  $ ./switch -p ipc://@/tmp/ipc1 foo
   bar
   baz
 
   (terminal-3)
-  $ ./broadcast -p ipc://@/tmp/ipc2 bar
+  $ ./switch -p ipc://@/tmp/ipc2 bar
   foo
   baz
 
   (terminal-4)
-  $ ./broadcast -p ipc://@/tmp/ipc3 baz
+  $ ./switch -p ipc://@/tmp/ipc3 baz
   foo
   bar
  */
@@ -101,8 +101,8 @@ int main(int argc, char **argv)
 	} else if (argc == 4 && !strcmp(argv[1], "-p")) {
 		process(argv[2], argv[3]);
 	} else {
-		fprintf(stderr, "Usage: ./broadcast -b <uri1> <uri2> <uri3>\n"
-				"       ./broadcast -p <uri> <string>\n");
+		fprintf(stderr, "Usage: ./switch -b <uri1> <uri2> <uri3>\n"
+				"       ./switch -p <uri> <string>\n");
 	}
 
 	return 0;
