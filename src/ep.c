@@ -151,7 +151,7 @@ int rteipc_ep_open(const char *uri)
 	core->partner = -1;
 
 	ep = malloc(sizeof(*ep));
-	if (!core) {
+	if (!ep) {
 		fprintf(stderr, "Failed to allocate memory for ep\n");
 		goto free_core;
 	}
