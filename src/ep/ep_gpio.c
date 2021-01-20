@@ -46,14 +46,8 @@ static void upstream(evutil_socket_t fd, short what, void *arg)
 	if (!self->bev)
 		return;
 
-	val = gpiod_line_get_value(data->line);
-	if (val < 0) {
-		fprintf(stderr, "Error reading gpio value\n");
-		goto err;
-	}
-
-	evbuffer_add(buf, val ? "1" : "0", 1);
-	nl = htonl(1);
+	evbuffer_add(buf, &ev, sizeof(ev));
+	nl = htonl(sizeof(ev));
 	evbuffer_prepend(buf, &nl, 4);
 	bufferevent_write_buffer(self->bev, buf);
 	return;
