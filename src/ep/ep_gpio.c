@@ -74,17 +74,20 @@ static void gpio_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 			return;
 		}
 
-		if ((len == 1 && *msg == '1') ||
-		    (len == 2 && strncasecmp(msg, "hi", len))) {
-			gpiod_line_set_value(data->line, 1);
-		} else if ((len == 1 && *msg == '0') ||
-		    (len == 2 && strncasecmp(msg, "lo", len))) {
-			gpiod_line_set_value(data->line, 0);
-		} else {
+		if (!data->out) {
+			fprintf(stderr, "Cannot write against an input GPIO\n");
+			goto free_msg;
+		}
+
+		if (len != 1 || (*msg != '1' && *msg != '0')) {
 			fprintf(stderr,
 				"Warn: ep_gpio cannot understand:%.*s\n",
 				len, msg);
+			goto free_msg;
 		}
+
+		gpiod_line_set_value(data->line, *msg == '1' ? 1 : 0);
+free_msg:
 		free(msg);
 	}
 }
@@ -97,12 +100,12 @@ static int gpio_open(struct rteipc_ep *self, const char *path)
 	struct event *ev;
 	char consumer[256] = {0};
 	char chip_path[PATH_MAX] = {0};
-	char out[4] = {0};
+	char dir[4] = {0};
 	int val = 0;
 	int num, fd, ret;
 
 	sscanf(path, "%[^@]@%[^-]-%d,%[^,],%d",
-			consumer, chip_path, &num, out, &val);
+			consumer, chip_path, &num, dir, &val);
 
 	data = malloc(sizeof(*data));
 	if (!data) {
@@ -127,16 +130,14 @@ static int gpio_open(struct rteipc_ep *self, const char *path)
 	}
 	data->line = line;
 
-	if (strlen(out) == 1 && !strncasecmp(out, "1", 1) ||
-			strlen(out) == 3 && !strncasecmp(out, "out", 3)) {
+	if (strlen(dir) == 3 && !strncasecmp(dir, "out", 3)) {
 		data->out = 1;
 		ret = gpiod_line_request_output(line, consumer, val);
 		if (ret < 0) {
 			fprintf(stderr, "Failed to request gpio output\n");
 			goto free_line;
 		}
-	} else if (strlen(out) == 1 && !strncasecmp(out, "0", 1) ||
-			strlen(out) == 2 && !strncasecmp(out, "in", 2)) {
+	} else if (strlen(dir) == 2 && !strncasecmp(dir, "in", 2)) {
 		ret  = gpiod_line_request_both_edges_events(line, consumer);
 		if (ret < 0) {
 			fprintf(stderr, "Failed to request gpio events\n");
@@ -152,7 +153,7 @@ static int gpio_open(struct rteipc_ep *self, const char *path)
 		data->ev = ev;
 		event_add(ev, NULL);
 	} else {
-		fprintf(stderr, "Invalid path:%s\n", chip_path);
+		fprintf(stderr, "Invalid path:%s\n", path);
 		goto free_line;
 	}
 
