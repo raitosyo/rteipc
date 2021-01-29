@@ -12,6 +12,7 @@
 #define EP_IPC		0
 #define EP_TTY		1
 #define EP_GPIO		2
+#define EP_SPI		3
 
 
 struct rteipc_ep;

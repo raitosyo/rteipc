@@ -14,6 +14,7 @@ extern __thread struct event_base *__base;
 extern struct rteipc_ep_ops ipc_ops;
 extern struct rteipc_ep_ops tty_ops;
 extern struct rteipc_ep_ops gpio_ops;
+extern struct rteipc_ep_ops spi_ops;
 
 struct ep_core {
 	int id;
@@ -25,6 +26,7 @@ static struct rteipc_ep_ops *ep_ops_list[] = {
 	[EP_IPC]  = &ipc_ops,
 	[EP_TTY]  = &tty_ops,
 	[EP_GPIO] = &gpio_ops,
+	[EP_SPI] = &spi_ops,
 };
 
 static dtbl_t ep_tbl = DTBL_INITIALIZER(MAX_NR_EP);
@@ -138,6 +140,8 @@ int rteipc_ep_open(const char *uri)
 		type = EP_TTY;
 	} else if (!strcmp(protocol, "gpio")) {
 		type = EP_GPIO;
+	} else if (!strcmp(protocol, "spi")) {
+		type = EP_SPI;
 	} else {
 		fprintf(stderr, "Unknown protocol:%s\n", protocol);
 		return -1;
