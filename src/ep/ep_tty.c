@@ -22,7 +22,7 @@
 
 
 struct tty_data {
-	int down_fd;
+	int fd;
 	struct event *ev;
 };
 
@@ -110,7 +110,7 @@ static void tty_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 			return;
 		}
 
-		rteipc_msg_write(data->down_fd, msg, len);
+		rteipc_msg_write(data->fd, msg, len);
 		free(msg);
 	}
 }
@@ -154,7 +154,7 @@ static int tty_open(struct rteipc_ep *self, const char *path)
 		return -1;
 	}
 
-	data->down_fd = fd;
+	data->fd = fd;
 	self->data = data;
 
 	ev = event_new(self->base, fd, EV_READ | EV_PERSIST, upstream, self);
@@ -167,10 +167,10 @@ static void tty_close(struct rteipc_ep *self)
 {
 	struct tty_data *data = self->data;
 	event_del(data->ev);
-	close(data->down_fd);
+	close(data->fd);
 }
 
-struct rteipc_ep_ops ep_tty = {
+struct rteipc_ep_ops tty_ops = {
 	.on_data = tty_on_data,
 	.open = tty_open,
 	.close = tty_close,

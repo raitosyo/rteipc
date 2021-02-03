@@ -176,7 +176,7 @@ static void gpio_close(struct rteipc_ep *self)
 	event_del(data->ev);
 }
 
-struct rteipc_ep_ops ep_gpio = {
+struct rteipc_ep_ops gpio_ops = {
 	.on_data = gpio_on_data,
 	.open = gpio_open,
 	.close = gpio_close,

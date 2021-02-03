@@ -156,7 +156,7 @@ static void ipc_close(struct rteipc_ep *self)
 	free(data);
 }
 
-struct rteipc_ep_ops ep_ipc = {
+struct rteipc_ep_ops ipc_ops = {
 	.on_data = ipc_on_data,
 	.open = ipc_open,
 	.close = ipc_close,

@@ -9,9 +9,9 @@
 
 #define MAX_NR_EP		(2 * DESC_BIT_WIDTH)
 
-#define RTEIPC_IPC		0
-#define RTEIPC_TTY		1
-#define RTEIPC_GPIO		2
+#define EP_IPC		0
+#define EP_TTY		1
+#define EP_GPIO		2
 
 
 struct rteipc_ep;
