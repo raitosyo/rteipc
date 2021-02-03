@@ -29,6 +29,10 @@ struct gpio_data {
 	struct event *ev;
 };
 
+/*
+ * Send data from GPIO endpoint to the other endpoint to which it's
+ * bound.
+ */
 static void upstream(evutil_socket_t fd, short what, void *arg)
 {
 	struct rteipc_ep *self = arg;
@@ -57,6 +61,10 @@ err:
 	return;
 }
 
+/*
+ * Process data from the other endpoint to which GPIO endpoint is bound.
+ * The data must be either '1' or '0'.
+ */
 static void gpio_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 {
 	struct gpio_data *data = self->data;

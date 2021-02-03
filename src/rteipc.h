@@ -27,9 +27,9 @@ int rteipc_setcb(int cid, rteipc_read_cb read_cb, rteipc_err_cb err_cb,
 			void *arg, short flag);
 
 int rteipc_ep_open(const char *uri);
-void rteipc_ep_close(int eid);
-int rteipc_ep_bind(int ep_a, int ep_b);
-int rteipc_ep_unbind(int ep_a, int ep_b);
+void rteipc_ep_close(int id);
+int rteipc_ep_bind(int id_a, int id_b);
+void rteipc_ep_unbind(int id);
 
 int rteipc_sw(void);
 int rteipc_sw_ep_open(int sid);

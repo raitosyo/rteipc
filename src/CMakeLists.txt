@@ -15,6 +15,7 @@ set(RTEIPC_SOURCES
     message.c
     list.c
     table.c
+    ep_core.c
     ep.c
     ep/ep_ipc.c
     ep/ep_tty.c

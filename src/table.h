@@ -4,6 +4,7 @@
 #ifndef _RTEIPC_DTBL_H
 #define _RTEIPC_DTBL_H
 
+#include <pthread.h>
 #include <event2/util.h>
 #include "list.h"
 

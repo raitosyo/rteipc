@@ -24,6 +24,12 @@ static ev_uint32_t msg_length(struct evbuffer *buf)
 	return msglen;
 }
 
+/**
+ * rteipc_msg_drain - remove a message from an evbuffer and copy it to @msg_out
+ * @buf: evbuffer from which data removed
+ * @size_out: message data length
+ * @msg_out: buffer allocated and filled with data, must be free()ed by caller
+ */
 int rteipc_msg_drain(struct evbuffer *buf, size_t *size_out, char **msg_out)
 {
 	ev_uint32_t len = msg_length(buf);
