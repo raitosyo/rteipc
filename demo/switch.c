@@ -31,8 +31,6 @@
 #include "rteipc.h"
 
 
-static int sw_ep[3];
-
 static void read_cb(int ctx, void *data, size_t len, void *arg)
 {
 	printf("%.*s\n", len, data);
@@ -54,16 +52,9 @@ static void process(const char *uri, const char *msg)
 	rteipc_shutdown();
 }
 
-static void swep_cb(int sw, int from_ep, void *data, size_t len, void *arg)
+static bool sw_filter(const char *src, const char *dst, void *data, size_t len)
 {
-	int to_ep, i;
-
-	for (i = 0; i < 3; i++) {
-		to_ep = sw_ep[i];
-		if (to_ep == from_ep)
-			continue;
-		rteipc_sw_xfer(sw, to_ep, data, len);
-	}
+	return true;
 }
 
 static void broker(const char *uri1, const char *uri2, const char *uri3)
@@ -74,21 +65,16 @@ static void broker(const char *uri1, const char *uri2, const char *uri3)
 	printf("broker start!\n");
 
 	rteipc_init(NULL);
-	ep[0] = rteipc_ep_open(uri1);
-	ep[1] = rteipc_ep_open(uri2);
-	ep[2] = rteipc_ep_open(uri3);
-	if (ep[0] < 0 || ep[1] < 0 || ep[2] < 0) {
-		fprintf(stderr, "Failed to open endpoints\n");
-		return;
-	}
 
 	/* create a switch instance */
 	sw = rteipc_sw();
-	rteipc_sw_setcb(sw, swep_cb, NULL, 0);
-	for (i = 0; i < 3; i++) {
-		sw_ep[i] = rteipc_sw_ep_open(sw);
-		rteipc_ep_bind(ep[i], sw_ep[i]);
+	if (rteipc_ep_bind(rteipc_port(sw, "ipc1"), rteipc_ep_open(uri1)) ||
+	    rteipc_ep_bind(rteipc_port(sw, "ipc2"), rteipc_ep_open(uri2)) ||
+	    rteipc_ep_bind(rteipc_port(sw, "ipc3"), rteipc_ep_open(uri3))) {
+		fprintf(stderr, "Failed to open endpoints\n");
+		return;
 	}
+	rteipc_filter(sw, sw_filter);
 
 	rteipc_dispatch(NULL);
 	rteipc_shutdown();

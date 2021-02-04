@@ -1,272 +1,179 @@
-// Copyright (c) 2018 Ryosuke Saito All rights reserved.
+// Copyright (c) 2018 - 2021 Ryosuke Saito All rights reserved.
 // MIT licensed
 
+/*
+ * A port is a special endpoint that can be bound to any other like a normal
+ * endpoint except it has no backend (i.e., it won't read/write any data
+ * from/to the backend).
+ * While the constraint that an endpoint can be bound to only one at the same
+ * time gives its simplicity, but often inconvenient. For that, the switch and
+ * port are introduced. In other words, using them makes it as if an endpoint
+ * can be bound together more than one.
+ *
+ */
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include "rteipc.h"
-#include "table.h"
 #include "ep.h"
+#include "message.h"
+#include "table.h"
 
 
 #define MAX_NR_SW		DESC_BIT_WIDTH
 
-#define list_node_to_sep(n) \
-	(struct sep *)((char *)(n) - (char *)&((struct sep *)0)->entry)
+#define node_to_port(n) \
+	(struct rteipc_port *)((char *)(n) - (char *)&((struct rteipc_port *)0)->entry)
 
 extern __thread struct event_base *__base;
 
-struct sep {
-	int id;
-	int ctx;
-	struct rteipc_sw *parent;
-	node_t entry;
-};
+struct rteipc_ep_ops port_ops;
 
 struct rteipc_sw {
 	int id;
-	rteipc_sw_cb handler;
-	void *data;
-	short flag;
-	list_t ep_list;
+	list_t port_list;
+	rteipc_filter_cb filter;
 };
 
-struct sep_desc {
-	int sid;
-	int eid;
+struct rteipc_port {
+	char *key;
+	struct rteipc_ep *ep;
+	struct rteipc_sw *sw;
+	node_t entry;
 };
 
 static dtbl_t sw_tbl = DTBL_INITIALIZER(MAX_NR_SW);
-static pthread_mutex_t sw_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
-static inline struct sep *__sep_list_find(int sid, int eid)
+static void port_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 {
-	struct rteipc_sw *sw = NULL;
-	struct sep *ret = NULL;
-	node_t *n;
-	int i;
-
-	sw = dtbl_get(&sw_tbl, sid);
-	if (!sw)
-		goto out;
-
-	list_each(&sw->ep_list, n, {
-		struct sep *sep = list_node_to_sep(n);
-		if (sep->id == eid) {
-			ret = sep;
-			break;
-		}
-	})
-
-out:
-	return ret;
-}
-
-int rteipc_sw_evxfer(int sid, int eid, struct evbuffer *buf)
-{
-	struct sep *sep;
-	int ctx;
-
-	pthread_mutex_lock(&sw_mutex);
-
-	sep = __sep_list_find(sid, eid);
-	if (!sep) {
-		pthread_mutex_unlock(&sw_mutex);
-		fprintf(stderr, "Invalid sw-ep=%d is specified\n", eid);
-		return -1;
-	}
-	ctx = sep->ctx;
-
-	pthread_mutex_unlock(&sw_mutex);
-	return rteipc_evsend(ctx, buf);
-}
-
-int rteipc_sw_xfer(int sid, int eid, const void *data, size_t len)
-{
-	struct evbuffer *buf = evbuffer_new();
+	struct rteipc_port *src = self->data;
+	struct rteipc_sw *sw = src->sw;
+	struct evbuffer *in = bufferevent_get_input(bev);
+	char *msg;
+	size_t len;
 	int ret;
+	node_t *n;
 
-	evbuffer_add(buf, data, len);
-	ret = rteipc_sw_evxfer(sid, eid, buf);
-	evbuffer_free(buf);
-	return ret;
+	for (;;) {
+		if (!(ret = rteipc_msg_drain(in, &len, &msg)))
+			return;
+
+		if (ret < 0) {
+			fprintf(stderr, "Error reading data\n");
+			return;
+		}
+
+		list_each(&sw->port_list, n, {
+			struct rteipc_port *dst = node_to_port(n);
+			if (src != dst && sw->filter(src->key, dst->key,
+						msg, len)) {
+				rteipc_buffer(dst->ep->bev, msg, len);
+			}
+		})
+		free(msg);
+	}
 }
 
-static void err_cb(int ctx, short events, void *arg)
+static void port_close(struct rteipc_ep *self)
 {
-	struct sep_desc *desc = arg;
-	struct sep *sep;
+	struct rteipc_port *port = self->data;
+	struct rteipc_sw *sw = port->sw;
+	list_remove(&sw->port_list, &port->entry);
+	free(port->key);
+	free(port);
+}
+
+int rteipc_filter(int desc, rteipc_filter_cb filter)
+{
 	struct rteipc_sw *sw;
 
-	pthread_mutex_lock(&sw_mutex);
-
-	fprintf(stderr, "switch fatal error occurred\n");
-	sep = __sep_list_find(desc->sid, desc->eid);
-	if (sep) {
-		sw = sep->parent;
-		list_remove(&sw->ep_list, &sep->entry);
-		rteipc_ep_close(sep->id);
-		free(sep);
-		free(desc);
-	}
-
-	pthread_mutex_unlock(&sw_mutex);
-}
-
-static void data_cb(int ctx, void *data, size_t len, void *arg)
-{
-	struct sep_desc *desc = arg;
-	struct sep *sep;
-	struct rteipc_sw *sw;
-
-	pthread_mutex_lock(&sw_mutex);
-
-	sep = __sep_list_find(desc->sid, desc->eid);
-	if (!sep) {
-		fprintf(stderr, "sw ep already closed\n");
-		pthread_mutex_unlock(&sw_mutex);
-		return;
-	}
-	sw = sep->parent;
-
-	if (sw->handler) {
-		pthread_mutex_unlock(&sw_mutex);
-		sw->handler(desc->sid, desc->eid, data, len, sw->data);
-	} else {
-		pthread_mutex_unlock(&sw_mutex);
-	}
-}
-
-static void rand_fname(char *out, size_t len)
-{
-	static const char set[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-				  "abcdefghijklmnopqrstuvwxyz"
-				  "0123456789._-";
-	int i, end = len - 1;
-
-	for (i = 0; i < end; ++i)
-		out[i] = set[rand() % (sizeof(set) - 1)];
-	out[end] = 0;
-}
-
-int rteipc_sw_setcb(int id, rteipc_sw_cb handler, void *arg, short flag)
-{
-	struct rteipc_sw *sw = dtbl_get(&sw_tbl, id);
-
-	if (!sw) {
-		fprintf(stderr, "Invalid switch id:%d\n", id);
+	if (!(sw = dtbl_get(&sw_tbl, desc))) {
+		fprintf(stderr, "Invalid switch id\n");
 		return -1;
 	}
-	sw->handler = handler;
-	sw->data = arg;
-	sw->flag = flag;
+	sw->filter = filter;
 	return 0;
 }
 
-int rteipc_sw_ep_open(int id)
+int rteipc_port(int desc, const char *key)
 {
-	const char *fmt = "ipc://@rteipc-sw%02d-%s";
-	char path[32] = {0}, fname[7];
-	struct rteipc_sw *sw = NULL;
-	struct sep *sep;
-	struct sep_desc *desc;
-	struct bufferevent *bev;
-	struct sockaddr_un addr;
-	int err;
-
-	sw = dtbl_get(&sw_tbl, id);
-	if (!sw) {
-		fprintf(stderr, "Invalid switch id is specified\n");
-		return -1;
-	}
-
-	rand_fname(fname, sizeof(fname));
-	snprintf(path, sizeof(path), fmt, id, fname);
-
-	err = rteipc_ep_open(path);
-	if (err < 0) {
-		fprintf(stderr, "Failed to create ep=%s\n", path);
-		return -1;
-	}
-
-	sep = malloc(sizeof(*sep));
-	desc = malloc(sizeof(*desc));
-	if (!sep || !desc) {
-		fprintf(stderr, "Failed to allocate memory for ep\n");
-		goto close_ep;
-	}
-	sep->id = err;
-	sep->parent = sw;
-
-	err = rteipc_connect(path);
-	if (err < 0) {
-		fprintf(stderr, "Failed to connect to ep=%s\n", path);
-		goto free_sep;
-	}
-	sep->ctx = err;
-	desc->sid = sw->id;
-	desc->eid = sep->id;
-
-	list_push(&sw->ep_list, &sep->entry);
-	rteipc_setcb(sep->ctx, data_cb, err_cb, desc, RTEIPC_NO_EXIT_ON_ERR);
-	return sep->id;
-
-free_sep:
-	err = sep->id;
-	free(desc);
-	free(sep);
-close_ep:
-	rteipc_ep_close(err);
-	return -1;
-}
-
-void rteipc_sw_ep_close(int sid, int eid)
-{
-	struct sep *sep;
 	struct rteipc_sw *sw;
+	struct rteipc_port *port;
+	struct rteipc_ep *ep;
+	int id;
 
-	pthread_mutex_lock(&sw_mutex);
-
-	sep = __sep_list_find(sid, eid);
-	if (sep) {
-		sw = sep->parent;
-		list_remove(&sw->ep_list, &sep->entry);
-		rteipc_ep_close(sep->id);
-		free(sep);
+	if (!(sw = dtbl_get(&sw_tbl, desc))) {
+		fprintf(stderr, "Invalid switch id\n");
+		return -1;
 	}
 
-	pthread_mutex_unlock(&sw_mutex);
+	if (!(port = calloc(1, sizeof(*port)))) {
+		fprintf(stderr, "Failed to allocate memory for port\n");
+		return -1;
+	}
+	if (key)
+		port->key = calloc(1, strlen(key) ?: 1);
+
+	if (!port->key) {
+		fprintf(stderr, "Failed to allocate memory for port\n");
+		return -1;
+	}
+
+	if (strlen(key))
+		memcpy(port->key, key, strlen(key));
+
+	/* setup custom endpoint */
+	if (!(ep = allocate_endpoint(EP_TEMPLATE)))
+		goto out_port;
+
+	port->ep = ep;
+	port->sw = sw;
+	ep->data = port;
+	ep->ops = &port_ops;
+
+	if ((id = register_endpoint(ep)) < 0)
+		goto out_ep;
+
+	list_push(&sw->port_list, &port->entry);
+	return id;
+
+out_ep:
+	destroy_endpoint(ep);
+out_port:
+	free(port->key);
+	free(port);
+	return -1;
 }
 
 int rteipc_sw(void)
 {
-	struct rteipc_sw *sw = malloc(sizeof(*sw));
+	struct rteipc_sw *sw;
+	int desc;
 
+	sw = malloc(sizeof(*sw));
 	if (!sw) {
 		fprintf(stderr, "Failed to create sw\n");
 		return -1;
 	}
-	sw->handler = NULL;
-	sw->data = NULL;
-	sw->flag = 0;
-	list_init(&sw->ep_list);
 
-	pthread_mutex_lock(&sw_mutex);
+	list_init(&sw->port_list);
 
-	sw->id = dtbl_set(&sw_tbl, sw);
-	if (sw->id < 0) {
+	desc = dtbl_set(&sw_tbl, sw);
+	if (desc < 0) {
 		fprintf(stderr, "Failed to register sw\n");
-		goto free_sw;
+		free(sw);
+		return -1;
 	}
+	sw->id = desc;
 
-	pthread_mutex_unlock(&sw_mutex);
-	return 0;
-
-free_sw:
-	free(sw);
-	pthread_mutex_unlock(&sw_mutex);
-	return -1;
+	return desc;
 }
+
+struct rteipc_ep_ops port_ops = {
+	.on_data = port_on_data,
+	.open = NULL,
+	.close = port_close,
+};

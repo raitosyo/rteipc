@@ -22,6 +22,7 @@ struct ep_core {
 };
 
 static struct rteipc_ep_ops *ep_ops_list[] = {
+	[EP_TEMPLATE]  = NULL,
 	[EP_IPC]  = &ipc_ops,
 	[EP_TTY]  = &tty_ops,
 	[EP_GPIO] = &gpio_ops,

@@ -1,6 +1,38 @@
 // Copyright (c) 2018 Ryosuke Saito All rights reserved.
 // MIT licensed
 
+/*
+ * An endpoint is a core design of rteipc, and it's a representation of and an
+ * interface with a process, file, or peripheral (e.g., gpio, tty). Each
+ * endpoint can be bound to any other but only one at the same time.
+ *
+ * The data stream is transferred between each endpoint bound together, and the
+ * only way for a process to read/write the data from/to an endpoint is to
+ * connect to the EP_IPC endpoint only with which a process can talk.
+ *
+ * For example, if a process wants to read/write data from/to EP_TTY, should
+ * connect to EP_IPC and read/write data through it.
+ *
+ *        EP_TTY                                    EP_IPC
+ *    +-------------+                           +-------------+
+ *    |  rteipc_ep  |                           |  rteipc_ep  |
+ *    |             |                           |             |
+ *    |     .bev <--|------- Data Stream -------|--> .bev     |
+ *    |     .ops <--|----------+    +-----------|--> .ops     |
+ *    |             |          |    |           |             |
+ *    +-------------+          |    |           +-------------+
+ *                             |    |
+ *                  read/write |    | read/write
+ *       Backend  <------------+    +------------>  Backend  <------+
+ *      (/dev/tty*)                              (Unix Socket)      |
+ *                                                                  |
+ *                                                       read/write |
+ *                          +---------+                             |
+ *                          | Process |<----------------------------+
+ *                          +---------+
+ *
+ * The data format in the stream is determined by each endpoint.
+ */
 #ifndef _RTEIPC_EP_H
 #define _RTEIPC_EP_H
 
@@ -9,43 +41,11 @@
 
 #define MAX_NR_EP		(2 * DESC_BIT_WIDTH)
 
-#define EP_IPC		0
-#define EP_TTY		1
-#define EP_GPIO		2
-#define EP_SPI		3
-
-
-/*
- * An endpoint is a core design of rteipc, and it's a representation of and an
- * interface with a process, file or peripheral (e.g., gpio, tty). Each
- * endpoint can be bound to any other but only one in the same time.
- *
- * The data stream is transferred between each endpoint bound together, and the
- * only way for a process to read/write the data from/to an endpoint is to
- * connect to the EP_IPC endpoint only with which a process can talk.
- *
- * For example, if a process want to read/write data from/to EP_TTY, should
- * connect to EP_IPC and read/write data through it.
- *
- *        EP_TTY                                    EP_IPC
- *    +-------------+                           +-------------+
- *    |  rteipc_ep  |                           |  rteipc_ep  |
- *    |             |                           |             |
- *    |     .bev <--|--- Paired bufferevents ---|--> .bev     |
- *    |     .ops <--|----------+    +-----------|--> .ops     |
- *    |             |          |    |           |             |
- *    +-------------+          |    |           +-------------+
- *                             |    |
- *                  read/write |    | read/write
- *     '/dev/tty*' <-----------+    +-----------> 'Unix socket' <---+
- *                                                                  |
- *                                                       read/write |
- *                          +---------+                             |
- *                          | Process |<----------------------------+
- *                          +---------+
- *
- * The data format is determined by and depends on each endpoint.
- */
+#define EP_TEMPLATE	0
+#define EP_IPC		1
+#define EP_TTY		2
+#define EP_GPIO		3
+#define EP_SPI		4
 
 struct rteipc_ep;
 
