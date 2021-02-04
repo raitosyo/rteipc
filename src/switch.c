@@ -29,16 +29,14 @@
 
 extern __thread struct event_base *__base;
 
-struct rteipc_ep_ops port_ops;
-
 struct rteipc_sw {
 	int id;
 	list_t port_list;
-	rteipc_filter_cb filter;
+	rteipc_sw_handler handler;
 };
 
 struct rteipc_port {
-	char *key;
+	char key[16];
 	struct rteipc_ep *ep;
 	struct rteipc_sw *sw;
 	node_t entry;
@@ -47,10 +45,27 @@ struct rteipc_port {
 static dtbl_t sw_tbl = DTBL_INITIALIZER(MAX_NR_SW);
 
 
+static inline struct rteipc_port *find_port(int desc, const char *key)
+{
+	struct rteipc_sw *sw;
+	struct rteipc_port *p;
+	node_t *n;
+
+	if (!(sw = dtbl_get(&sw_tbl, desc)))
+		return NULL;
+
+	list_each(&sw->port_list, n, {
+		p = node_to_port(n);
+		if (!strcmp(p->key, key))
+			return p;
+	})
+	return NULL;
+}
+
 static void port_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 {
-	struct rteipc_port *src = self->data;
-	struct rteipc_sw *sw = src->sw;
+	struct rteipc_port *port = self->data;
+	struct rteipc_sw *sw = port->sw;
 	struct evbuffer *in = bufferevent_get_input(bev);
 	char *msg;
 	size_t len;
@@ -66,13 +81,16 @@ static void port_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 			return;
 		}
 
-		list_each(&sw->port_list, n, {
-			struct rteipc_port *dst = node_to_port(n);
-			if (src != dst && sw->filter(src->key, dst->key,
-						msg, len)) {
-				rteipc_buffer(dst->ep->bev, msg, len);
-			}
-		})
+		if (sw->handler) {
+			sw->handler(sw->id, port->key, msg, len);
+		} else {
+			// default handler (broadcat to all ports)
+			list_each(&sw->port_list, n, {
+				struct rteipc_port *p = node_to_port(n);
+				if (p != port)
+					rteipc_buffer(p->ep->bev, msg, len);
+			})
+		}
 		free(msg);
 	}
 }
@@ -82,11 +100,16 @@ static void port_close(struct rteipc_ep *self)
 	struct rteipc_port *port = self->data;
 	struct rteipc_sw *sw = port->sw;
 	list_remove(&sw->port_list, &port->entry);
-	free(port->key);
 	free(port);
 }
 
-int rteipc_filter(int desc, rteipc_filter_cb filter)
+struct rteipc_ep_ops port_ops = {
+	.on_data = port_on_data,
+	.open = NULL,
+	.close = port_close,
+};
+
+int rteipc_sw_setcb(int desc, rteipc_sw_handler cb)
 {
 	struct rteipc_sw *sw;
 
@@ -94,7 +117,38 @@ int rteipc_filter(int desc, rteipc_filter_cb filter)
 		fprintf(stderr, "Invalid switch id\n");
 		return -1;
 	}
-	sw->filter = filter;
+	sw->handler = cb;
+	return 0;
+}
+
+/**
+ * rteipc_xfer - transfer data to the port of the switch specified by 'desc'
+ *               and 'key'
+ * @desc: switch descriptor
+ * @key: port key
+ * @data: buffer containing data
+ * @len: length of buffer to be sent
+ */
+int rteipc_xfer(int desc, const char *key, void *data, size_t len)
+{
+	struct rteipc_sw *sw;
+	struct rteipc_port *port;
+
+	if (!(sw = dtbl_get(&sw_tbl, desc))) {
+		fprintf(stderr, "Invalid switch id\n");
+		return -1;
+	}
+
+	if (!key || strlen(key) >= sizeof(port->key)) {
+		fprintf(stderr, "Invalid port key\n");
+		return -1;
+	}
+
+	if (!(port = find_port(desc, key))) {
+		fprintf(stderr, "No such port found in the switch\n");
+		return -1;
+	}
+	rteipc_buffer(port->ep->bev, data, len);
 	return 0;
 }
 
@@ -105,8 +159,19 @@ int rteipc_port(int desc, const char *key)
 	struct rteipc_ep *ep;
 	int id;
 
+	if (key && strlen(key) >= sizeof(port->key)) {
+		fprintf(stderr, "Key length exceeds limit(%d)\n",
+				sizeof(port->key) - 1);
+		return -1;
+	}
+
 	if (!(sw = dtbl_get(&sw_tbl, desc))) {
 		fprintf(stderr, "Invalid switch id\n");
+		return -1;
+	}
+
+	if (find_port(desc, key)) {
+		fprintf(stderr, "Key=%s already exists in the switch\n", key);
 		return -1;
 	}
 
@@ -114,16 +179,9 @@ int rteipc_port(int desc, const char *key)
 		fprintf(stderr, "Failed to allocate memory for port\n");
 		return -1;
 	}
+
 	if (key)
-		port->key = calloc(1, strlen(key) ?: 1);
-
-	if (!port->key) {
-		fprintf(stderr, "Failed to allocate memory for port\n");
-		return -1;
-	}
-
-	if (strlen(key))
-		memcpy(port->key, key, strlen(key));
+		strcpy(port->key, key);
 
 	/* setup custom endpoint */
 	if (!(ep = allocate_endpoint(EP_TEMPLATE)))
@@ -143,7 +201,6 @@ int rteipc_port(int desc, const char *key)
 out_ep:
 	destroy_endpoint(ep);
 out_port:
-	free(port->key);
 	free(port);
 	return -1;
 }
@@ -171,9 +228,3 @@ int rteipc_sw(void)
 
 	return desc;
 }
-
-struct rteipc_ep_ops port_ops = {
-	.on_data = port_on_data,
-	.open = NULL,
-	.close = port_close,
-};

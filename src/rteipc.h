@@ -13,8 +13,8 @@
 
 typedef void (*rteipc_read_cb)(int ctx, void *data, size_t len, void *arg);
 typedef void (*rteipc_err_cb)(int ctx, short events, void *arg);
-typedef bool (*rteipc_filter_cb)(const char *key_src, const char *key_dst,
-		void *data, size_t len);
+typedef void (*rteipc_sw_handler)(int sw, const char *key, void *data,
+					size_t len);
 
 void rteipc_init(struct event_base *base);
 void rteipc_reinit(void);
@@ -33,7 +33,8 @@ int rteipc_bind(int ea, int eb);
 void rteipc_unbind(int ep);
 
 int rteipc_sw(void);
+int rteipc_sw_setcb(int sw, rteipc_sw_handler cb);
 int rteipc_port(int sw, const char *key);
-int rteipc_filter(int sw, rteipc_filter_cb filter);
+int rteipc_xfer(int sw, const char *key, void *data, size_t len);
 
 #endif /* _RTEIPC_H */

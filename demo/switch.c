@@ -52,11 +52,6 @@ static void process(const char *uri, const char *msg)
 	rteipc_shutdown();
 }
 
-static bool sw_filter(const char *src, const char *dst, void *data, size_t len)
-{
-	return true;
-}
-
 static void broker(const char *uri1, const char *uri2, const char *uri3)
 {
 	int sw;
@@ -75,7 +70,6 @@ static void broker(const char *uri1, const char *uri2, const char *uri3)
 		fprintf(stderr, "Failed to open endpoints\n");
 		return;
 	}
-	rteipc_filter(sw, sw_filter);
 
 	rteipc_dispatch(NULL);
 	rteipc_shutdown();
