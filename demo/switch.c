@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Ryosuke Saito All rights reserved.
+// Copyright (c) 2018 - 2021 Ryosuke Saito All rights reserved.
 // MIT licensed
 
 /*
@@ -59,8 +59,7 @@ static bool sw_filter(const char *src, const char *dst, void *data, size_t len)
 
 static void broker(const char *uri1, const char *uri2, const char *uri3)
 {
-	int sw, swep, i;
-	int ep[3];
+	int sw;
 
 	printf("broker start!\n");
 
@@ -68,9 +67,11 @@ static void broker(const char *uri1, const char *uri2, const char *uri3)
 
 	/* create a switch instance */
 	sw = rteipc_sw();
-	if (rteipc_ep_bind(rteipc_port(sw, "ipc1"), rteipc_ep_open(uri1)) ||
-	    rteipc_ep_bind(rteipc_port(sw, "ipc2"), rteipc_ep_open(uri2)) ||
-	    rteipc_ep_bind(rteipc_port(sw, "ipc3"), rteipc_ep_open(uri3))) {
+
+	/* bind each port and endpoint */
+	if (rteipc_bind(rteipc_port(sw, "ipc1"), rteipc_open(uri1)) ||
+	    rteipc_bind(rteipc_port(sw, "ipc2"), rteipc_open(uri2)) ||
+	    rteipc_bind(rteipc_port(sw, "ipc3"), rteipc_open(uri3))) {
 		fprintf(stderr, "Failed to open endpoints\n");
 		return;
 	}

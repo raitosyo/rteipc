@@ -1,4 +1,4 @@
-# Copyright (c) 2018 Ryosuke Saito All rights reserved.
+# Copyright (c) 2018 - 2021 Ryosuke Saito All rights reserved.
 # MIT licensed
 #
 
@@ -14,7 +14,7 @@ include(CheckLibraryExists)
 include(CheckCSourceCompiles)
 include(GNUInstallDirs)
 
-set(PACKAGE_VERSION 0.1)
+set(PACKAGE_VERSION 0.2)
 
 option(RTEIPC_STATIC_LIB "Build static library instead of shared library." OFF)
 
@@ -41,3 +41,6 @@ install (
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 
 add_subdirectory(src)
+
+# Uncomment if you want to build demo applications
+#add_subdirectory(demo)

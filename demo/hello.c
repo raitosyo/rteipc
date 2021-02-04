@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Ryosuke Saito All rights reserved.
+// Copyright (c) 2018 - 2021 Ryosuke Saito All rights reserved.
 // MIT licensed
 
 /*
@@ -55,13 +55,13 @@ static void broker(const char *uri1, const char *uri2)
 	printf("broker start!\n");
 
 	rteipc_init(NULL);
-	ep1 = rteipc_ep_open(uri1);
-	ep2 = rteipc_ep_open(uri2);
+	ep1 = rteipc_open(uri1);
+	ep2 = rteipc_open(uri2);
 	if (ep1 < 0 || ep2 < 0) {
 		fprintf(stderr, "Failed to open endpoints\n");
 		return;
 	}
-	rteipc_ep_bind(ep1, ep2);
+	rteipc_bind(ep1, ep2);
 	rteipc_dispatch(NULL);
 	rteipc_shutdown();
 }

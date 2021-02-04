@@ -7,25 +7,25 @@
 #include "ep.h"
 
 
-static void ep_read_cb(struct bufferevent *bev, void *arg)
+static void read_cb(struct bufferevent *bev, void *arg)
 {
 	struct rteipc_ep *ep = arg;
 	if (ep && ep->ops->on_data)
 		ep->ops->on_data(ep, bev);
 }
 
-int rteipc_ep_bind(int lh, int rh)
+int rteipc_bind(int lh, int rh)
 {
-	return bind_endpoint(find_endpoint(lh), find_endpoint(rh), ep_read_cb,
+	return bind_endpoint(find_endpoint(lh), find_endpoint(rh), read_cb,
 			NULL, NULL);
 }
 
-void rteipc_ep_unbind(int id)
+void rteipc_unbind(int id)
 {
 	unbind_endpoint(find_endpoint(id));
 }
 
-int rteipc_ep_open(const char *uri)
+int rteipc_open(const char *uri)
 {
 	char protocol[16], path[128];
 	struct rteipc_ep *ep;
@@ -65,7 +65,7 @@ out_put:
 	return -1;
 }
 
-void rteipc_ep_close(int id)
+void rteipc_close(int id)
 {
 	struct ep_core *core;
 	struct rteipc_ep *ep;

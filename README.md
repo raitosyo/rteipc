@@ -30,9 +30,9 @@ any rteipc functions are called.
 
 An endpoint is an interface to a process or a file (e.g. socket/tty/gpio).
 
-##### int rteipc_ep_open(const char *uri)
+##### int rteipc_open(const char *uri)
 
-rteipc_ep_open() creates IPC/TTY/GPIO endpoints. The return value is an
+rteipc_open() creates IPC/TTY/GPIO endpoints. The return value is an
 endpoint descriptor. The argument _uri_ has a different format depends on its
 type:
 
@@ -42,14 +42,14 @@ type:
       "gpio://consumer-name@/dev/gpiochip0-1,out,lo"  (GPIO_01 is configured as direction:out, value:0)
       "gpio://consumer-name@/dev/gpiochip0-1,in"      (GPIO_01 is configured as direction:in)
 
-##### int rteipc_ep_bind(int ep_a, int ep_b)
+##### int rteipc_bind(int ep_a, int ep_b)
 
-rteipc_ep_bind() connects two endpoints together. The return value is zero on
+rteipc_bind() connects two endpoints together. The return value is zero on
 success, otherwise -1. The argument _ep_a_, _ep_b_ are endpoint descriptors.
 
-##### int rteipc_ep_unbind(int ep_a, int ep_b)
+##### int rteipc_unbind(int ep_a, int ep_b)
 
-rteipc_ep_unbind() removes connection from two endpoints. The return value is
+rteipc_unbind() removes connection from two endpoints. The return value is
 zero on success, otherwise -1. The argument _ep_a_, _ep_b_ are endpoint
 descriptors.
 
@@ -106,30 +106,30 @@ specified, exit the event loop after the specified time.
     int main(void)
     {
         int ctx;
-        int ep_ipc, ep_gpio, ep_tty;
-        const char *ipc = "ipc://@/tmp/rteipc";
-        const char *gpio = "gpio://reset@/dev/gpiochip0-1,out,lo";
-        const char *tty = "tty:///dev/ttyS0,115200";
+        int ipc, gpio, tty;
+        const char *ipc_uri = "ipc://@/tmp/rteipc";
+        const char *gpio_uri = "gpio://reset@/dev/gpiochip0-1,out,lo";
+        const char *tty_uri = "tty:///dev/ttyS0,115200";
         struct timeval tv = {0, 100 * 1000};
 
         rteipc_init(NULL);
 
-        ep_ipc = rteipc_ep_open(ipc);
-        ep_gpio = rteipc_ep_open(gpio);
-        ep_tty = rteipc_ep_open(tty);
-        if (ep_ipc < 0 || ep_gpio < 0 || ep_tty < 0) {
+        ipc = rteipc_open(ipc_uri);
+        gpio = rteipc_open(gpio_uri);
+        tty = rteipc_open(tty_uri);
+        if (ipc < 0 || gpio < 0 || tty < 0) {
             fprintf(stderr, "Failed to open endpoints\n");
             exit(EXIT_FAILURE);
         }
 
-        ctx = rteipc_connect(ipc);
+        ctx = rteipc_connect(ipc_uri);
         if (ctx < 0) {
             fprintf(stderr, "Failed to connect to socket\n");
             exit(EXIT_FAILURE);
         }
 
         /* Bind IPC and GPIO endpoints together to reset the device via the GPIO line */
-        if (rteipc_ep_bind(ep_ipc, ep_gpio)) {
+        if (rteipc_bind(ipc, gpio)) {
             fprintf(stderr, "Failed to bind GPIO endpoint\n");
             exit(EXIT_FAILURE);
         }
@@ -139,10 +139,10 @@ specified, exit the event loop after the specified time.
         rteipc_dispatch(&tv);
 
         /* Unbind them since we don't need the connection anymore */
-        rteipc_ep_unbind(ep_ipc, ep_gpio);
+        rteipc_unbind(ipc, gpio);
 
         /* Rebind IPC and TTY endpoints together to communicate with the device via UART */
-        if (rteipc_ep_bind(ep_ipc, ep_tty)) {
+        if (rteipc_bind(ipc, tty)) {
             fprintf(stderr, "Failed to bind TTY endpoint\n");
             exit(EXIT_FAILURE);
         }
