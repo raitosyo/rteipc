@@ -2,7 +2,7 @@
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/raitosyo/rteipc/master/LICENSE)
 [![Build Status](https://img.shields.io/circleci/project/github/raitosyo/rteipc/master.svg)](https://circleci.com/gh/raitosyo/rteipc)
 
-IPC library for embedded Linux; uses libevent.
+IPC library for working with peripherals on embedded Linux; uses libevent.
 
 ## Building
 
@@ -14,7 +14,7 @@ To create an build in the project tree:
 
 ## How to use rteipc
 
-rteipc uses libevent and is a wrapper library for embedded systems.
+rteipc uses libevent for event loop and has modules to interact with peripherals.
 
 ### Initialization
 
@@ -22,19 +22,29 @@ rteipc can be initialized with a preconfigured event_base of libevent.
 
 ##### void rteipc_init(struct event_base *base)
 
-rteipc_init() initializes libevent with the argument _base_. If _base_ is NULL
-a new event_base will be created and used. This function must be called before
-any rteipc functions are called.
+rteipc_init() initializes libevent with the argument _base_. If _base_ is NULL a new event_base will be automatically created and used. This function must be called before any rteipc functions are called.
 
 ### Endpoint
 
-An endpoint is an interface to a process or a file (e.g. socket/tty/gpio).
+In rteipc, an endpoint (EP) is a common interface with a process, file, or peripheral. If a process wants to interact with a peripheral, there must be two EPs, one is for the process and the other for the peripheral, bound together to transfer data between them. The following figure shows how a process reads/writes from/to a peripheral device.
+
+                  EP                    EP
+             (For process)        (For peripheral)
+            +------------+         +------------+
+       +--->|            |<------->|            |<---+
+       |    +------------+  bound  +------------+    |
+       |                                             |
+       +---->'Backend'<-----+        'Backend'<------+
+            (Unix Soket)    |        (Device)  read/write
+                            |
+               process <----+
+                        read/write
+
+###### _Backend_ supported by rteipc: _Unix domain socket_, _GPIO_, _TTY_, and _SPI_.
 
 ##### int rteipc_open(const char *uri)
 
-rteipc_open() creates IPC/TTY/GPIO endpoints. The return value is an
-endpoint descriptor. The argument _uri_ has a different format depends on its
-type:
+rteipc_open() creates IPC/TTY/GPIO endpoints. The return value is an endpoint descriptor. The argument _uri_ has a different format depends on its type:
 
       "ipc://@socket-name"                            (UNIX domain socket in abstract namespace)
       "ipc:///tmp/path-name"                          (UNIX domain socket bound to a filesystem pathname)
@@ -44,126 +54,39 @@ type:
 
 ##### int rteipc_bind(int ep_a, int ep_b)
 
-rteipc_bind() connects two endpoints together. The return value is zero on
-success, otherwise -1. The argument _ep_a_, _ep_b_ are endpoint descriptors.
+rteipc_bind() connects two endpoints together. The return value is zero on success, otherwise -1. The argument _ep_a_, _ep_b_ are endpoint descriptors.
 
 ##### int rteipc_unbind(int ep_a, int ep_b)
 
-rteipc_unbind() removes connection from two endpoints. The return value is
-zero on success, otherwise -1. The argument _ep_a_, _ep_b_ are endpoint
-descriptors.
+rteipc_unbind() removes connection from two endpoints. The return value is zero on success, otherwise -1. The argument _ep_a_, _ep_b_ are endpoint descriptors.
 
 ### Reading from and Writing to an IPC Endpoint
 
-A process which uses rteipc can read from and write to only IPC endpoint. The
-data stored in an IPC endpoint will be available in the other endpoint to which
-the IPC endpoint is bound, and vice versa.
+A process that uses rteipc can read from and write to only IPC endpoint. The data stored in an IPC endpoint will be available in the other endpoint to which the IPC endpoint is bound, and vice versa.
 
 ##### int rteipc_connect(const char *uri)
 
-rteipc_connect() connects a process to an IPC endpoint. The endpoint specified
-by the uri must be created before this function call. The return value is an
-context descriptor on success, otherwise -1. The argument _uri_ is a endpoint
-pathname (see above).
+rteipc_connect() connects a process to an IPC endpoint. The endpoint specified by the _uri_ must be created before this function call. The return value is a context descriptor on success, otherwise -1. The argument _uri_ is an endpoint pathname (see above).
 
-##### int rteipc_send(int cid, const void *buf, size_t len)
+##### int rteipc_send(int ctx, const void *buf, size_t len)
 
-rteipc_send() are used to transmit data to an IPC endpoint. The argument _cid_
-is the context descriptor of the sending connection returned by
-rteipc_connect(). The data is found in _buf_ and has length _len_.
+rteipc_send() is used to transmit data to an IPC endpoint. The argument _ctx_ is the context descriptor of the sending connection returned by rteipc_connect(). The data is found in _buf_ and has length _len_.
 
-##### int rteipc_setcb(int cid, rteipc_read_cb read_cb, rteipc_err_cb err_cb, void *arg, short flag)
+##### int rteipc_setcb(int ctx, rteipc_read_cb read_cb, rteipc_err_cb err_cb, void *arg, short flag)
 
-rteipc_setcb() changes read/error callbacks. The argument _arg_ can be used to
-pass data to the callbacks and _flag_ is a bitmask of flags. The following
-_flag_ is defined:  
-_RTEIPC_NO_EXIT_ON_ERR_  
+rteipc_setcb() changes read/error callbacks. The argument _arg_ can be used to pass data to the callbacks and _flag_ is a bitmask of flags. The following _flag_ is defined:  _RTEIPC_NO_EXIT_ON_ERR_
 &nbsp; &nbsp; Do not exit from the event loop when an error occurs.
 
 ### Event loop
 
 ##### void rteipc_dispatch(struct timeval *tv)
 
-rteipc_dispatch() runs event dispatching loop. If the argument _tv_ is
-specified, exit the event loop after the specified time.
+rteipc_dispatch() runs event dispatching loop. If the argument _tv_ is specified, exit the event loop after the specified time.
+
+### Switch and Port
+
+A process often has to deal with more than one peripherals or communicate with other processes, however, this cannot be done with the endpoint model because an endpoint can be bound to only one at the same time. For that, the switch and port are introduced. In other words, using them makes it as if an endpoint can be bound together more than one. A port is a special endpoint that belongs to a switch, that can be bound to any other like a normal endpoint except it has no backend (i.e., it won't read/write any data from/to the backend). It is only used to control data streams between EPs.
 
 ## Example
 
-###### Serial Port Reading/Writing With GPIO reset
-
-    #include <stdio.h>
-    #include <stdlib.h>
-    #include <string.h>
-    #include <sys/time.h>
-    #include <rteipc.h>
-
-    static void read_cb(int ctx, void *data, size_t len, void *arg)
-    {
-        // Display data from the device
-        printf("%.*s", len, data);
-    }
-
-    int main(void)
-    {
-        int ctx;
-        int ipc, gpio, tty;
-        const char *ipc_uri = "ipc://@/tmp/rteipc";
-        const char *gpio_uri = "gpio://reset@/dev/gpiochip0-1,out,lo";
-        const char *tty_uri = "tty:///dev/ttyS0,115200";
-        struct timeval tv = {0, 100 * 1000};
-
-        rteipc_init(NULL);
-
-        ipc = rteipc_open(ipc_uri);
-        gpio = rteipc_open(gpio_uri);
-        tty = rteipc_open(tty_uri);
-        if (ipc < 0 || gpio < 0 || tty < 0) {
-            fprintf(stderr, "Failed to open endpoints\n");
-            exit(EXIT_FAILURE);
-        }
-
-        ctx = rteipc_connect(ipc_uri);
-        if (ctx < 0) {
-            fprintf(stderr, "Failed to connect to socket\n");
-            exit(EXIT_FAILURE);
-        }
-
-        /* Bind IPC and GPIO endpoints together to reset the device via the GPIO line */
-        if (rteipc_bind(ipc, gpio)) {
-            fprintf(stderr, "Failed to bind GPIO endpoint\n");
-            exit(EXIT_FAILURE);
-        }
-        /* Assert GPIO line by writing "1" */
-        rteipc_send(ctx, "1", 1);
-        /* 100ms event loop */
-        rteipc_dispatch(&tv);
-
-        /* Unbind them since we don't need the connection anymore */
-        rteipc_unbind(ipc, gpio);
-
-        /* Rebind IPC and TTY endpoints together to communicate with the device via UART */
-        if (rteipc_bind(ipc, tty)) {
-            fprintf(stderr, "Failed to bind TTY endpoint\n");
-            exit(EXIT_FAILURE);
-        }
-        /* send "hello" to the device */
-        rteipc_send(ctx, "hello", strlen("hello"));
-        rteipc_setcb(ctx, read_cb, NULL, NULL, 0);
-        /* Run event loop */
-        rteipc_dispatch(NULL);
-        return 0;
-    }
-
-The above codes assume:
-
-                   IPC-Endpoint                   GPIO-Endpoint                  Physical
-                   |----------------------| bind  |------------------|           Device
-            socket | (abstract namespace) |<----->| "/dev/gpiochip0" |  GPIO1_1  |-------|
-    process <----> |    "@/tmp/rteipc"    |<--|   |                  | <=======> |       |
-                   |----------------------|   |   |------------------|           |       |
-                                              |                                  |       |
-                                              |   TTY-Endpoint                   |       |
-                                              |   |------------------|           |       |
-                                              |-->|   "/dev/ttyS0"   |   UART    |       |
-                                                  |                  | <=======> |       |
-                                                  |------------------|           |-------|
+Sample programs are in the demo directory.
