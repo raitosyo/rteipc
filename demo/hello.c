@@ -17,10 +17,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-#include <event2/buffer.h>
-#include <event2/util.h>
-#include <event2/event.h>
 #include "rteipc.h"
 
 

@@ -24,10 +24,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-#include <event2/buffer.h>
-#include <event2/util.h>
-#include <event2/event.h>
 #include "rteipc.h"
 
 
@@ -70,6 +66,12 @@ static void broker(const char *uri1, const char *uri2, const char *uri3)
 		fprintf(stderr, "Failed to open endpoints\n");
 		return;
 	}
+
+	/*
+	 * NOTE: Switch will send all the data received on a port to all the
+	 * other ports. If you want to change this behavior, set your own
+	 * handler for the switch by rteipc_sw_setcb().
+	 */
 
 	rteipc_dispatch(NULL);
 	rteipc_shutdown();
