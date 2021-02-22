@@ -85,7 +85,7 @@ rteipc_dispatch() runs event dispatching loop. If the argument _tv_ is specified
 
 ### Switch and Port
 
-A process often has to deal with more than one peripherals or communicate with other processes, however, this cannot be done with the endpoint model because an endpoint can be bound to only one at the same time. For that, the switch and port are introduced. In other words, using them makes it as if an endpoint can be bound together more than one. A port is a special endpoint that belongs to a switch, that can be bound to any other like a normal endpoint except it has no backend (i.e., it won't read/write any data from/to the backend). It is only used to control data streams between EPs.
+A process often has to deal with more than one peripherals or to communicate with other processes, which requires as many IPC endpoints as the endpoints to which it transfers data because an endpoint can be bound to only one at the same time. As it's not efficient to manage many IPC endpoints and their contexts just for a 'gate' to the other endpoints, the switch and port can be utilized in this case. Using them makes it as if an endpoint can be bound together more than one and there's no need to create such many 'gate' IPC endpoints. A port is a special endpoint that belongs to a switch, that can be bound to any other like a normal endpoint except it has no backend (i.e., it won't read/write any data from/to the backend). It is only used to control data streams between EPs.
 
 ## Example
 
