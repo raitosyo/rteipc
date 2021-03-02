@@ -49,6 +49,7 @@ rteipc_open() creates IPC/TTY/GPIO endpoints. The return value is an endpoint de
       "ipc://@socket-name"                            (UNIX domain socket in abstract namespace)
       "ipc:///tmp/path-name"                          (UNIX domain socket bound to a filesystem pathname)
       "tty:///dev/ttyUSB0,115200"                     (/dev/ttyUSB0 setting speed to 115200 baud)
+      "spi:///dev/spidev0.0,5000,3"                   (/dev/spidev0.0 setting max speed to 5kHz and SPI mode to 3)
       "gpio://consumer-name@/dev/gpiochip0-1,out,lo"  (GPIO_01 is configured as direction:out, value:0)
       "gpio://consumer-name@/dev/gpiochip0-1,in"      (GPIO_01 is configured as direction:in)
 
@@ -56,9 +57,9 @@ rteipc_open() creates IPC/TTY/GPIO endpoints. The return value is an endpoint de
 
 rteipc_bind() connects two endpoints together. The return value is zero on success, otherwise -1. The argument _ep_a_, _ep_b_ are endpoint descriptors.
 
-##### int rteipc_unbind(int ep_a, int ep_b)
+##### int rteipc_unbind(int ep)
 
-rteipc_unbind() removes connection from two endpoints. The return value is zero on success, otherwise -1. The argument _ep_a_, _ep_b_ are endpoint descriptors.
+rteipc_unbind() removes connection from two endpoints. The return value is zero on success, otherwise -1. The argument _ep_ is an endpoint descriptor bound.
 
 ### Reading from and Writing to an IPC Endpoint
 
