@@ -6,7 +6,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <termios.h>
 #include <signal.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -31,7 +30,6 @@
 
 struct spi_data {
 	int fd;
-	struct event *ev;
 };
 
 static void spidev_on_data(struct rteipc_ep *self, struct bufferevent *bev)
@@ -49,7 +47,7 @@ static void spidev_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 			return;
 
 		if (ret < 0) {
-			fprintf(stderr, "Error reading data from spidev\n");
+			fprintf(stderr, "Error reading data\n");
 			return;
 		}
 
@@ -107,7 +105,6 @@ out:
 static int spidev_open(struct rteipc_ep *self, const char *path)
 {
 	struct spi_data *data;
-	struct event *ev;
 	char dev[128] = {0};
 	int speed, mode = 3;
 	int fd;
@@ -137,7 +134,6 @@ static int spidev_open(struct rteipc_ep *self, const char *path)
 static void spidev_close(struct rteipc_ep *self)
 {
 	struct spi_data *data = self->data;
-	event_del(data->ev);
 	close(data->fd);
 }
 
