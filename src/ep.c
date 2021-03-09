@@ -41,6 +41,8 @@ int rteipc_open(const char *uri)
 		type = EP_GPIO;
 	} else if (!strcmp(protocol, "spi")) {
 		type = EP_SPI;
+	} else if (!strcmp(protocol, "i2c")) {
+		type = EP_I2C;
 	} else {
 		fprintf(stderr, "Unknown protocol:%s\n", protocol);
 		return -1;

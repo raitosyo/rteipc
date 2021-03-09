@@ -20,7 +20,8 @@ set(RTEIPC_SOURCES
     ep/ep_ipc.c
     ep/ep_tty.c
     ep/ep_gpio.c
-    ep/ep_spi.c)
+    ep/ep_spi.c
+    ep/ep_i2c.c)
 
 if (RTEIPC_STATIC_LIB)
     add_library(${PROJECT_NAME} STATIC ${RTEIPC_SOURCES})
