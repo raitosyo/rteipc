@@ -40,7 +40,7 @@ static void read_i2c(int ctx, void *data, size_t len, void *arg)
 
 	printf("read : [");
 	for (i = 0; i < len; i++)
-		printf(" 0x%02x", ((uint8_t *)data)[i]);
+		printf(" 0x%02x", byte_array[i]);
 	printf(" ]\n");
 	event_base_loopbreak(base);
 }

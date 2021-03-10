@@ -16,12 +16,11 @@ static struct spi_ioc_transfer spi_xfer[MAX_BYTES];
 static void read_spi(int ctx, void *data, size_t len, void *arg)
 {
 	struct event_base *base = arg;
-	struct spi_ioc_transfer *xfer = data;
-	size_t num = len / sizeof(*xfer);
+	uint8_t *byte_array = data;
 	int i;
 
-	for (i = 0; i < num; i++, xfer++)
-		printf(" 0x%02x", ((uint8_t *)xfer->rx_buf)[0]);
+	for (i = 0; i < len; i++)
+		printf(" 0x%02x", byte_array[i]);
 	event_base_loopbreak(base);
 }
 

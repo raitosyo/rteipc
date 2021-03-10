@@ -65,9 +65,8 @@ static void spidev_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 			}
 
 			if (self->bev && xfer->rx_buf) {
-				/* send data back when reading */
-				evbuffer_add(buf, xfer, sizeof(*xfer));
-				nl = htonl(sizeof(*xfer));
+				evbuffer_add(buf, (void *)xfer->rx_buf, xfer->len);
+				nl = htonl(xfer->len);
 				evbuffer_prepend(buf, &nl, 4);
 				bufferevent_write_buffer(self->bev, buf);
 			}
