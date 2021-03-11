@@ -21,7 +21,8 @@ set(RTEIPC_SOURCES
     ep/ep_tty.c
     ep/ep_gpio.c
     ep/ep_spi.c
-    ep/ep_i2c.c)
+    ep/ep_i2c.c
+    ep/ep_sysfs.c)
 
 if (RTEIPC_STATIC_LIB)
     add_library(${PROJECT_NAME} STATIC ${RTEIPC_SOURCES})
@@ -51,5 +52,6 @@ find_package(PkgConfig)
 find_package(Threads REQUIRED)
 pkg_check_modules(LIBEVENT REQUIRED libevent libevent_pthreads)
 pkg_check_modules(LIBGPIOD REQUIRED libgpiod)
+pkg_check_modules(LIBUDEV  REQUIRED libudev)
 
-target_link_libraries(rteipc ${LIBEVENT_LIBRARIES} ${LIBGPIOD_LIBRARIES})
+target_link_libraries(rteipc ${LIBEVENT_LIBRARIES} ${LIBGPIOD_LIBRARIES} ${LIBUDEV_LIBRARIES})

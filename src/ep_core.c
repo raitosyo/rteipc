@@ -15,6 +15,7 @@ extern struct rteipc_ep_ops tty_ops;
 extern struct rteipc_ep_ops gpio_ops;
 extern struct rteipc_ep_ops spi_ops;
 extern struct rteipc_ep_ops i2c_ops;
+extern struct rteipc_ep_ops sysfs_ops;
 
 struct ep_core {
 	int id;
@@ -29,6 +30,7 @@ static struct rteipc_ep_ops *ep_ops_list[] = {
 	[EP_GPIO] = &gpio_ops,
 	[EP_SPI] = &spi_ops,
 	[EP_I2C] = &i2c_ops,
+	[EP_SYSFS] = &sysfs_ops,
 };
 
 static dtbl_t ep_tbl = DTBL_INITIALIZER(MAX_NR_EP);

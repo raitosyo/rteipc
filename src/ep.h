@@ -47,6 +47,7 @@
 #define EP_GPIO		3
 #define EP_SPI		4
 #define EP_I2C		5
+#define EP_SYSFS	6
 
 struct rteipc_ep;
 

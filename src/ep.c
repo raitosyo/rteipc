@@ -43,6 +43,8 @@ int rteipc_open(const char *uri)
 		type = EP_SPI;
 	} else if (!strcmp(protocol, "i2c")) {
 		type = EP_I2C;
+	} else if (!strcmp(protocol, "sysfs")) {
+		type = EP_SYSFS;
 	} else {
 		fprintf(stderr, "Unknown protocol:%s\n", protocol);
 		return -1;
