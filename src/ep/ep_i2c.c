@@ -119,6 +119,7 @@ static int i2c_open(struct rteipc_ep *self, const char *path)
 	fd = init_i2c(path);
 	if (fd < 0) {
 		fprintf(stderr, "Failed to init i2c\n");
+		free(data);
 		return -1;
 	}
 
