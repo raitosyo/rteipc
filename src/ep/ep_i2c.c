@@ -34,7 +34,6 @@ static void i2c_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 	char *msg;
 	size_t len, nl, num;
 	int ret, i;
-	struct evbuffer *buf = evbuffer_new();
 	struct i2c_rdwr_ioctl_data xfer;
 	struct i2c_msg *item;
 
@@ -64,10 +63,8 @@ static void i2c_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 
 		for (i = 0; i < xfer.nmsgs; i++) {
 			if (self->bev && (item[i].flags & I2C_M_RD)) {
-				evbuffer_add(buf, item[i].buf, item[i].len);
-				nl = htonl(item[i].len);
-				evbuffer_prepend(buf, &nl, 4);
-				bufferevent_write_buffer(self->bev, buf);
+				rteipc_buffer(self->bev,
+					      item[i].buf, item[i].len);
 			}
 		}
 free_msg:

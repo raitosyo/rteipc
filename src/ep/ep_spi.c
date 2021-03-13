@@ -39,7 +39,6 @@ static void spidev_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 	char *msg;
 	size_t len, nl, num;
 	int ret, i;
-	struct evbuffer *buf = evbuffer_new();
 	struct spi_ioc_transfer *xfer;
 
 	for (;;) {
@@ -65,10 +64,8 @@ static void spidev_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 			}
 
 			if (self->bev && xfer->rx_buf) {
-				evbuffer_add(buf, (void *)xfer->rx_buf, xfer->len);
-				nl = htonl(xfer->len);
-				evbuffer_prepend(buf, &nl, 4);
-				bufferevent_write_buffer(self->bev, buf);
+				rteipc_buffer(self->bev,
+					      (void *)xfer->rx_buf, xfer->len);
 			}
 		}
 free_msg:
