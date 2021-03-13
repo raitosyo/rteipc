@@ -19,6 +19,7 @@ jobs:
           pkg-config
           libevent-dev
           libgpiod-dev
+          libudev-dev
           cmake
       - run: mkdir build; cd build; cmake ..; cmake --build .
 
