@@ -47,7 +47,6 @@ void main(int argc, char **argv)
 {
 	const char *ipc = "ipc://@/sample_sysfs";
 	struct event_base *base = event_base_new();
-	struct timeval tv = {0, 1};
 	char buf[256];
 	int ctx;
 	bool wr;
@@ -78,6 +77,6 @@ void main(int argc, char **argv)
 	snprintf(buf, sizeof(buf), "%s", argv[2]);
 	rteipc_send(ctx, buf, strlen(buf));
 	rteipc_setcb(ctx, read_sysfs, NULL, base, 0);
-	rteipc_dispatch(wr ? &tv : NULL);
+	rteipc_dispatch(NULL);
 	rteipc_shutdown();
 }
