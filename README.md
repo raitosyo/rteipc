@@ -40,18 +40,20 @@ In rteipc, an endpoint (EP) is a common interface with a process, file, or perip
                process <----+
                         read/write
 
-###### _Backend_ supported by rteipc: _Unix domain socket_, _GPIO_, _TTY_, and _SPI_.
+###### _Backend_ supported by rteipc: _Unix domain socket_, _sysfs file_, _GPIO_, _TTY_, _I2C_, and _SPI_.
 
 ##### int rteipc_open(const char *uri)
 
-rteipc_open() creates IPC/TTY/GPIO endpoints. The return value is an endpoint descriptor. The argument _uri_ has a different format depends on its type:
+rteipc_open() creates endpoints for backends supported. The return value is an endpoint descriptor. The argument _uri_ has a different format depends on its type:
 
       "ipc://@socket-name"                            (UNIX domain socket in abstract namespace)
       "ipc:///tmp/path-name"                          (UNIX domain socket bound to a filesystem pathname)
-      "tty:///dev/ttyUSB0,115200"                     (/dev/ttyUSB0 setting speed to 115200 baud)
-      "spi:///dev/spidev0.0,5000,3"                   (/dev/spidev0.0 setting max speed to 5kHz and SPI mode to 3)
+      "sysfs://pwm:pwmchip0"                          (PWM1 via sysfs)
       "gpio://consumer-name@/dev/gpiochip0-1,out,lo"  (GPIO_01 is configured as direction:out, value:0)
       "gpio://consumer-name@/dev/gpiochip0-1,in"      (GPIO_01 is configured as direction:in)
+      "tty:///dev/ttyS0,115200"                       (/dev/ttyS0 setting speed to 115200 baud)
+      "i2c:///dev/i2c-0"                              (I2C-1 device)
+      "spi:///dev/spidev0.0,5000,3"                   (/dev/spidev0.0 setting max speed to 5kHz and SPI mode to 3)
 
 ##### int rteipc_bind(int ep_a, int ep_b)
 
@@ -83,10 +85,6 @@ rteipc_setcb() changes read/error callbacks. The argument _arg_ can be used to p
 ##### void rteipc_dispatch(struct timeval *tv)
 
 rteipc_dispatch() runs event dispatching loop. If the argument _tv_ is specified, exit the event loop after the specified time.
-
-### Switch and Port
-
-A process often has to deal with more than one peripherals or to communicate with other processes, which requires as many IPC endpoints as the endpoints to which it transfers data because an endpoint can be bound to only one at the same time. As it's not efficient to manage many IPC endpoints and their contexts just for a 'gate' to the other endpoints, the switch and port can be utilized in this case. Using them makes it as if an endpoint can be bound together more than one and there's no need to create such many 'gate' IPC endpoints. A port is a special endpoint that belongs to a switch, that can be bound to any other like a normal endpoint except it has no backend (i.e., it won't read/write any data from/to the backend). It is only used to control data streams between EPs.
 
 ## Example
 
