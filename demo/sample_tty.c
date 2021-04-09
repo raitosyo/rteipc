@@ -29,9 +29,10 @@ void main(int argc, char **argv)
 	struct event *ev;
 	int ctx;
 
-	if (argc != 2) {
-		fprintf(stderr, "Usage: ./sample_tty <uri>\n"
-				"  (example: # ./sample_tty tty:///dev/ttyS0,115200)\n");
+	if (argc != 2 || argv[1] != strstr(argv[1], "tty://")) {
+		fprintf(stderr, "Usage: %s <uri>\n"
+				"  (example: # ./sample_tty tty:///dev/ttyS0,115200)\n",
+				argv[0]);
 		return;
 	}
 

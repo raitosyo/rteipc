@@ -73,7 +73,7 @@ void main(int argc, char **argv)
 	}
 	uri = (optind < argc) ? argv[optind] : NULL;
 
-	if (!uri || !addr || (!buf && !rsize))
+	if (!uri || uri != strstr(uri, "i2c://") || !addr || (!buf && !rsize))
 		usage_exit();
 
 	rteipc_init(base);

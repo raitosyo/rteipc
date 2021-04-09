@@ -51,7 +51,7 @@ void main(int argc, char **argv)
 	int ctx;
 	bool wr;
 
-	if (argc != 3 && argc != 4)
+	if ((argc != 3 && argc != 4) || argv[1] != strstr(argv[1], "sysfs://"))
 		usage_exit();
 
 	wr = !!(argc == 4);

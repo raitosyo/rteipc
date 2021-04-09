@@ -33,10 +33,11 @@ void main(int argc, char **argv)
 	uint8_t bytes;
 	char *hex;
 
-	if (argc != 3) {
-		fprintf(stderr, "Usage: ./sample_spi <uri> <DATA>\n"
+	if (argc != 3 || argv[1] != strstr(argv[1], "spi://")) {
+		fprintf(stderr, "Usage: %s <uri> <DATA>\n"
 				"  (example: # ./sample_spi spi:///dev/spidev0.0,1000000,3 "
-				"\"0xaa 0xbb 0xcc 0xdd\")\n");
+				"\"0xaa 0xbb 0xcc 0xdd\")\n",
+				argv[0]);
 		return;
 	}
 
