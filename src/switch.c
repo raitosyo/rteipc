@@ -41,6 +41,7 @@ struct rteipc_port {
 	struct rteipc_ep *ep;
 	struct rteipc_sw *sw;
 	node_t entry;
+	rteipc_port_handler handler;
 };
 
 static dtbl_t sw_tbl = DTBL_INITIALIZER(MAX_NR_SW);
@@ -85,7 +86,9 @@ static void port_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 			return;
 		}
 
-		if (sw->handler) {
+		if (port->handler) {
+			port->handler(sw->id, msg, len);
+		} else if (sw->handler) {
 			sw->handler(sw->id, port->key, msg, len);
 		} else {
 			// default handler (broadcat to all ports)
@@ -122,6 +125,18 @@ int rteipc_sw_setcb(int desc, rteipc_sw_handler cb)
 		return -1;
 	}
 	sw->handler = cb;
+	return 0;
+}
+
+int rteipc_port_setcb(int desc, const char *key, rteipc_port_handler cb)
+{
+	struct rteipc_port *port;
+
+	if (!(port = find_port(desc, key))) {
+		fprintf(stderr, "No such port found in the switch\n");
+		return -1;
+	}
+	port->handler = cb;
 	return 0;
 }
 
