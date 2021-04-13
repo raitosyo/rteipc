@@ -132,8 +132,10 @@ static void i2c_close(struct rteipc_ep *self)
 	close(data->fd);
 }
 
+COMPATIBLE_WITH(i2c, COMPAT_IPC);
 struct rteipc_ep_ops i2c_ops = {
 	.on_data = i2c_on_data,
 	.open = i2c_open,
 	.close = i2c_close,
+	.compatible = i2c_compatible
 };

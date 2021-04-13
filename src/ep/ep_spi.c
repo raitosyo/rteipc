@@ -133,8 +133,10 @@ static void spidev_close(struct rteipc_ep *self)
 	close(data->fd);
 }
 
+COMPATIBLE_WITH(spidev, COMPAT_IPC);
 struct rteipc_ep_ops spi_ops = {
 	.on_data = spidev_on_data,
 	.open = spidev_open,
 	.close = spidev_close,
+	.compatible = spidev_compatible
 };

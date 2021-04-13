@@ -156,8 +156,10 @@ static void ipc_close(struct rteipc_ep *self)
 	free(data);
 }
 
+COMPATIBLE_WITH(ipc, COMPAT_ANY);
 struct rteipc_ep_ops ipc_ops = {
 	.on_data = ipc_on_data,
 	.open = ipc_open,
 	.close = ipc_close,
+	.compatible = ipc_compatible
 };

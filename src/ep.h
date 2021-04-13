@@ -49,15 +49,31 @@
 #define EP_I2C		5
 #define EP_SYSFS	6
 
+#define COMPAT_ANY		(~0)
+#define COMPAT_IPC		(1 << EP_IPC)
+#define COMPAT_TTY		(1 << EP_TTY)
+#define COMPAT_GPIO		(1 << EP_GPIO)
+#define COMPAT_SPI		(1 << EP_SPI)
+#define COMPAT_I2C		(1 << EP_I2C)
+#define COMPAT_SYSFS		(1 << EP_SYSFS)
+
+#define COMPATIBLE_WITH(name, mask)                   \
+	static inline int name##_compatible(int val)  \
+	{                                             \
+		return !!((1 << val) & (mask));       \
+	}
+
 struct rteipc_ep;
 
 struct rteipc_ep_ops {
 	int (*open)(struct rteipc_ep *self, const char *path);
 	void (*close)(struct rteipc_ep *self);
 	void (*on_data)(struct rteipc_ep *self, struct bufferevent *bev);
+	int (*compatible)(int type);
 };
 
 struct rteipc_ep {
+	int type;
 	struct event_base *base;
 	struct bufferevent *bev;
 	struct rteipc_ep_ops *ops;

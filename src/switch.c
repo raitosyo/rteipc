@@ -110,10 +110,12 @@ static void port_close(struct rteipc_ep *self)
 	free(port);
 }
 
+COMPATIBLE_WITH(port, COMPAT_ANY);
 struct rteipc_ep_ops port_ops = {
 	.on_data = port_on_data,
 	.open = NULL,
 	.close = port_close,
+	.compatible = port_compatible
 };
 
 int rteipc_sw_setcb(int desc, rteipc_sw_handler cb)

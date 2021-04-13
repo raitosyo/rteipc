@@ -170,8 +170,10 @@ static void tty_close(struct rteipc_ep *self)
 	close(data->fd);
 }
 
+COMPATIBLE_WITH(tty, COMPAT_IPC|COMPAT_TTY);
 struct rteipc_ep_ops tty_ops = {
 	.on_data = tty_on_data,
 	.open = tty_open,
 	.close = tty_close,
+	.compatible = tty_compatible
 };

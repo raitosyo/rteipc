@@ -130,8 +130,10 @@ static void sysfs_close(struct rteipc_ep *self)
 	udev_device_unref(data->device);
 }
 
+COMPATIBLE_WITH(sysfs, COMPAT_IPC);
 struct rteipc_ep_ops sysfs_ops = {
 	.on_data = sysfs_on_data,
 	.open = sysfs_open,
 	.close = sysfs_close,
+	.compatible = sysfs_compatible
 };

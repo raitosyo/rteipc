@@ -184,8 +184,10 @@ static void gpio_close(struct rteipc_ep *self)
 	event_del(data->ev);
 }
 
+COMPATIBLE_WITH(gpio, COMPAT_IPC);
 struct rteipc_ep_ops gpio_ops = {
 	.on_data = gpio_on_data,
 	.open = gpio_open,
 	.close = gpio_close,
+	.compatible = gpio_compatible
 };
