@@ -35,8 +35,9 @@ struct rteipc_sw {
 	rteipc_sw_handler handler;
 };
 
+#define MAX_KEY_NAME		16
 struct rteipc_port {
-	char key[16];
+	char key[MAX_KEY_NAME];
 	struct rteipc_ep *ep;
 	struct rteipc_sw *sw;
 	node_t entry;
@@ -50,6 +51,9 @@ static inline struct rteipc_port *find_port(int desc, const char *key)
 	struct rteipc_sw *sw;
 	struct rteipc_port *p;
 	node_t *n;
+
+	if (!key || strlen(key) >= MAX_KEY_NAME)
+		return NULL;
 
 	if (!(sw = dtbl_get(&sw_tbl, desc)))
 		return NULL;
@@ -139,11 +143,6 @@ int rteipc_xfer(int desc, const char *key, void *data, size_t len)
 		return -1;
 	}
 
-	if (!key || strlen(key) >= sizeof(port->key)) {
-		fprintf(stderr, "Invalid port key\n");
-		return -1;
-	}
-
 	if (!(port = find_port(desc, key))) {
 		fprintf(stderr, "No such port found in the switch\n");
 		return -1;
@@ -159,9 +158,14 @@ int rteipc_port(int desc, const char *key)
 	struct rteipc_ep *ep;
 	int id;
 
-	if (key && strlen(key) >= sizeof(port->key)) {
+	if (!key) {
+		fprintf(stderr, "Key must be specified\n");
+		return -1;
+	}
+
+	if (strlen(key) >= MAX_KEY_NAME) {
 		fprintf(stderr, "Key length exceeds limit(%d)\n",
-				sizeof(port->key) - 1);
+				MAX_KEY_NAME - 1);
 		return -1;
 	}
 
@@ -180,9 +184,6 @@ int rteipc_port(int desc, const char *key)
 		return -1;
 	}
 
-	if (key)
-		strcpy(port->key, key);
-
 	/* setup custom endpoint */
 	if (!(ep = allocate_endpoint(EP_TEMPLATE)))
 		goto out_port;
@@ -191,6 +192,7 @@ int rteipc_port(int desc, const char *key)
 	port->sw = sw;
 	ep->data = port;
 	ep->ops = &port_ops;
+	strcpy(port->key, key);
 
 	if ((id = register_endpoint(ep)) < 0)
 		goto out_ep;
