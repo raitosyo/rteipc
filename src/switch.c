@@ -135,13 +135,7 @@ int rteipc_sw_setcb(int desc, rteipc_sw_handler cb)
  */
 int rteipc_xfer(int desc, const char *key, void *data, size_t len)
 {
-	struct rteipc_sw *sw;
 	struct rteipc_port *port;
-
-	if (!(sw = dtbl_get(&sw_tbl, desc))) {
-		fprintf(stderr, "Invalid switch id\n");
-		return -1;
-	}
 
 	if (!(port = find_port(desc, key))) {
 		fprintf(stderr, "No such port found in the switch\n");
