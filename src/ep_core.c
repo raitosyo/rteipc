@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>
 #include "rteipc.h"
 #include "table.h"
 #include "ep.h"
@@ -111,8 +112,12 @@ void unbind_endpoint(struct rteipc_ep *ep)
 	struct ep_core *partner;
 	struct bufferevent *pair;
 
-	if (ep && ep->bev && (pair = bufferevent_pair_get_partner(ep->bev))) {
+	if (ep->bev && (pair = bufferevent_pair_get_partner(ep->bev))) {
 		partner = dtbl_get(&ep_tbl, (to_core(ep))->partner_id);
+
+		assert(partner);
+		assert(partner->ep.bev == pair);
+
 		bufferevent_free(ep->bev);
 		bufferevent_free(partner->ep.bev);
 		ep->bev = partner->ep.bev = NULL;
