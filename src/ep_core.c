@@ -78,11 +78,6 @@ int bind_endpoint(struct rteipc_ep *lh, struct rteipc_ep *rh,
 {
 	struct bufferevent *pair[2];
 
-	if (!lh || !rh) {
-		fprintf(stderr, "Invalid endpoint is specified\n");
-		return -1;
-	}
-
 	if (lh->bev || rh->bev) {
 		fprintf(stderr, "endpoint is busy\n");
 		return -1;

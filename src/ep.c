@@ -16,13 +16,30 @@ static void read_cb(struct bufferevent *bev, void *arg)
 
 int rteipc_bind(int lh, int rh)
 {
-	return bind_endpoint(find_endpoint(lh), find_endpoint(rh), read_cb,
-			NULL, NULL);
+	struct rteipc_ep *le, *re;
+
+	if (!(le = find_endpoint(lh)) || !(re = find_endpoint(rh))) {
+		fprintf(stderr, "Invalid endpoint specified\n");
+		return -1;
+	}
+
+	if (le == re) {
+		fprintf(stderr, "Cannot bind an endpoint to self\n");
+		return -1;
+	}
+
+	return bind_endpoint(le, re, read_cb, NULL, NULL);
 }
 
 void rteipc_unbind(int id)
 {
-	unbind_endpoint(find_endpoint(id));
+	struct rteipc_ep *ep;
+
+	if (!(ep = find_endpoint(id))) {
+		fprintf(stderr, "Invalid endpoint specified\n");
+		return;
+	}
+	unbind_endpoint(ep);
 }
 
 int rteipc_open(const char *uri)
