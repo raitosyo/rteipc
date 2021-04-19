@@ -32,7 +32,7 @@ static void sysfs_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 	struct udev_list_entry *list_entry;
 	struct evbuffer *in = bufferevent_get_input(bev);
 	const char *value;
-	char *msg, *pos, buf[PATH_MAX];
+	char *msg, *pos, *text, buf[PATH_MAX];
 	size_t len;
 	int ret;
 
@@ -46,37 +46,45 @@ static void sysfs_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 		}
 
 		/*
+		 * Duplicate a new string to ensure having a terminating null
+		 * byte.
+		 */
+		text = strndup(msg, len);
+		free(msg);
+
+		/*
 		 * A msg passed as "attr=value" pair for setting, as "attr" for
 		 * getting value. Setting a NULL value "attr=" is also
 		 * acceptable.
 		 */
-		if ((pos = strchr(msg, '='))) {
+		if ((pos = strchr(text, '='))) {
 			*pos = '\0';
 			/* NULL value ? */
-			if (msg + len <= ++pos)
+			if (text + len <= ++pos)
 				pos = NULL;
+
 			if (udev_device_set_sysattr_value(data->device,
-						msg, pos) != 0) {
+						text, pos) != 0) {
 				fprintf(stderr,
 					"Error setting attr:%s value:%s\n",
-					msg, pos ?: "NULL");
+					text, pos ?: "NULL");
 				goto free_msg;
 			}
 		} else {
 			value = udev_device_get_sysattr_value(
-					data->device, msg);
+					data->device, text);
 			if (value) {
-				snprintf(buf, sizeof(buf), "%s=%s", msg, value);
+				snprintf(buf, sizeof(buf), "%s=%s", text, value);
 				if (self->bev)
 					rteipc_buffer(self->bev,
 						      buf, strlen(buf));
 			} else {
 				fprintf(stderr,
-					"Error getting attr:%s\n", msg);
+					"Error getting attr:%s\n", text);
 			}
 		}
 free_msg:
-		free(msg);
+		free(text);
 	}
 }
 
