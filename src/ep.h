@@ -96,6 +96,8 @@ struct rteipc_ep *allocate_endpoint(int type);
 
 void destroy_endpoint(struct rteipc_ep *ep);
 
+struct rteipc_ep *get_partner_endpoint(struct rteipc_ep *ep);
+
 static inline int ep_compatible(struct rteipc_ep *lh, struct rteipc_ep *rh)
 {
 	if (!lh->ops->compatible || !rh->ops->compatible)

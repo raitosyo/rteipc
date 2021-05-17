@@ -63,6 +63,11 @@ int bind_endpoint(struct rteipc_ep *lh, struct rteipc_ep *rh,
 	return 0;
 }
 
+struct rteipc_ep *get_partner_endpoint(struct rteipc_ep *ep)
+{
+	return find_endpoint((to_core(ep))->partner_id);
+}
+
 void unbind_endpoint(struct rteipc_ep *ep)
 {
 	struct ep_core *partner;

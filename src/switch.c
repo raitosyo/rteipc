@@ -91,10 +91,12 @@ static void port_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 		} else if (sw->handler) {
 			sw->handler(sw->id, port->key, msg, len);
 		} else {
-			// default handler (broadcat to all ports)
+			// default handler (broadcast to all compatible ports)
+			struct rteipc_ep *src = get_partner_endpoint(port->ep);
 			list_each(&sw->port_list, n, {
 				struct rteipc_port *p = node_to_port(n);
-				if (p != port)
+				struct rteipc_ep *dest = get_partner_endpoint(p->ep);
+				if (p != port && ep_compatible(src, dest))
 					rteipc_buffer(p->ep->bev, msg, len);
 			})
 		}
