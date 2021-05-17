@@ -7,6 +7,30 @@
 #include "ep.h"
 
 
+struct ep_to_str {
+	int type;
+	char *name;
+};
+
+static const struct ep_to_str name_tbl[] = {
+	{EP_IPC,      "IPC"},
+	{EP_TTY,      "TTY"},
+	{EP_GPIO,     "GPIO"},
+	{EP_SPI,      "SPI"},
+	{EP_I2C,      "I2C"},
+	{EP_SYSFS,    "SYSFS"},
+};
+
+static inline const char *type_to_str(int type)
+{
+	int i;
+	for (i = 0; i < (sizeof(name_tbl) / sizeof(name_tbl[0])); i++) {
+		if (name_tbl[i].type == type)
+			return name_tbl[i].name;
+	}
+	return "UNKNOWN";
+}
+
 static void read_cb(struct bufferevent *bev, void *arg)
 {
 	struct rteipc_ep *ep = arg;
@@ -25,6 +49,12 @@ int rteipc_bind(int lh, int rh)
 
 	if (le == re) {
 		fprintf(stderr, "Cannot bind an endpoint to self\n");
+		return -1;
+	}
+
+	if (!ep_compatible(le, re)) {
+		fprintf(stderr, "Not compatible endpoints: %s and %s\n",
+				type_to_str(le->type), type_to_str(re->type));
 		return -1;
 	}
 

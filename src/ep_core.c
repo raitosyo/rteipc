@@ -24,11 +24,6 @@ struct ep_core {
 	struct rteipc_ep ep;
 };
 
-struct ep_to_str {
-	int type;
-	char *name;
-};
-
 static struct rteipc_ep_ops *ep_ops_list[] = {
 	[EP_TEMPLATE]  = NULL,
 	[EP_IPC]  = &ipc_ops,
@@ -41,38 +36,6 @@ static struct rteipc_ep_ops *ep_ops_list[] = {
 
 static dtbl_t ep_tbl = DTBL_INITIALIZER(MAX_NR_EP);
 
-static const struct ep_to_str name_tbl[] = {
-	{EP_TEMPLATE, "TEMP"},
-	{EP_IPC,      "IPC"},
-	{EP_TTY,      "TTY"},
-	{EP_GPIO,     "GPIO"},
-	{EP_SPI,      "SPI"},
-	{EP_I2C,      "I2C"},
-	{EP_SYSFS,    "SYSFS"},
-};
-
-static inline const char *type_to_str(int type)
-{
-	int i;
-	for (i = 0; i < (sizeof(name_tbl) / sizeof(name_tbl[0])); i++) {
-		if (name_tbl[i].type == type)
-			return name_tbl[i].name;
-	}
-	return NULL;
-}
-
-static inline int is_compatible(struct rteipc_ep *lh, struct rteipc_ep *rh)
-{
-	if (!lh->ops->compatible || !rh->ops->compatible)
-		return 0;
-
-	if (lh->type != EP_TEMPLATE && rh->type != EP_TEMPLATE)
-		return (lh->ops->compatible(rh->type) &&
-				rh->ops->compatible(lh->type));
-
-	return lh->ops->compatible(rh->type) || rh->ops->compatible(lh->type);
-}
-
 int bind_endpoint(struct rteipc_ep *lh, struct rteipc_ep *rh,
 		bufferevent_data_cb readcb, bufferevent_data_cb writecb,
 		bufferevent_event_cb eventcb)
@@ -81,13 +44,6 @@ int bind_endpoint(struct rteipc_ep *lh, struct rteipc_ep *rh,
 
 	if (lh->bev || rh->bev) {
 		fprintf(stderr, "endpoint is busy\n");
-		return -1;
-	}
-
-	if (!is_compatible(lh, rh)) {
-		fprintf(stderr, "Not compatible endpoints: %s and %s\n",
-				type_to_str(lh->type) ?: "UNKNOWN",
-				type_to_str(rh->type) ?: "UNKNOWN");
 		return -1;
 	}
 

@@ -96,4 +96,20 @@ struct rteipc_ep *allocate_endpoint(int type);
 
 void destroy_endpoint(struct rteipc_ep *ep);
 
+static inline int ep_compatible(struct rteipc_ep *lh, struct rteipc_ep *rh)
+{
+	if (!lh->ops->compatible || !rh->ops->compatible)
+		return 0;
+
+	if ((lh->ops->compatible(rh->type) &&
+			rh->ops->compatible(lh->type)))
+		return 2;  /* bidirectional */
+
+	if ((lh->ops->compatible(rh->type) ||
+			rh->ops->compatible(lh->type)))
+		return 1;  /* single-directional */
+
+	return 0;  /* Not compatible */
+}
+
 #endif /* _RTEIPC_EP_H */
