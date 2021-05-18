@@ -4,14 +4,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <linux/spi/spidev.h>
 #include "rteipc.h"
 
 #define MAX_BYTES	32
-
-static uint8_t tx_buf[MAX_BYTES];
-static uint8_t rx_buf[MAX_BYTES];
-static struct spi_ioc_transfer spi_xfer[MAX_BYTES];
 
 static void read_spi(int ctx, void *data, size_t len, void *arg)
 {
@@ -19,8 +14,10 @@ static void read_spi(int ctx, void *data, size_t len, void *arg)
 	uint8_t *byte_array = data;
 	int i;
 
+	printf("read : [");
 	for (i = 0; i < len; i++)
 		printf(" 0x%02x", byte_array[i]);
+	printf(" ]\n");
 	event_base_loopbreak(base);
 }
 
@@ -28,9 +25,8 @@ void main(int argc, char **argv)
 {
 	const char *ipc = "ipc://@/sample_spi";
 	struct event_base *base = event_base_new();
-	struct event *ev;
+	uint8_t tx_buf[MAX_BYTES];
 	int ctx, i = 0;
-	uint8_t bytes;
 	char *hex;
 
 	if (argc != 3 || argv[1] != strstr(argv[1], "spi://")) {
@@ -58,17 +54,12 @@ void main(int argc, char **argv)
 	do {
 		tx_buf[i] = strtoul(hex, NULL, 16);
 		printf(" 0x%02x", tx_buf[i]);
-		spi_xfer[i].tx_buf = (unsigned long)&tx_buf[i];
-		spi_xfer[i].rx_buf = (unsigned long)&rx_buf[i];
-		spi_xfer[i].len = 1;
 		i++;
 	} while (i < MAX_BYTES && (hex = strtok(NULL, " ")));
 	printf(" ]\n");
 
-	rteipc_send(ctx, spi_xfer, sizeof(spi_xfer[0]) * i);
+	rteipc_spi_send(ctx, tx_buf, i, true /* receive rx data */);
 	rteipc_setcb(ctx, read_spi, NULL, base, 0);
-	printf("read : [");
 	rteipc_dispatch(NULL);
-	printf(" ]\n");
 	rteipc_shutdown();
 }

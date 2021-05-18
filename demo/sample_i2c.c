@@ -5,14 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
-#include <linux/i2c.h>
 #include "rteipc.h"
 
 #define MAX_BYTES	32
-
-static struct i2c_msg i2c_msgs[2];
-static uint8_t tx_buf[MAX_BYTES];
-static uint8_t rx_buf[MAX_BYTES];
 
 static void usage_exit()
 {
@@ -49,6 +44,7 @@ void main(int argc, char **argv)
 {
 	const char *ipc = "ipc://@/sample_i2c";
 	struct event_base *base = event_base_new();
+	uint8_t tx_buf[MAX_BYTES];
 	int ctx, i = 0, c;
 	uint16_t rsize = 0, addr = 0;
 	char *uri, *hex, *buf = NULL;
@@ -97,30 +93,9 @@ void main(int argc, char **argv)
 			i++;
 		} while (i < MAX_BYTES && (hex = strtok(NULL, " ")));
 		printf(" ]\n");
-		i2c_msgs[0].addr = addr;
-		i2c_msgs[0].flags = 0;
-		i2c_msgs[0].buf = tx_buf;
-		i2c_msgs[0].len = i;
 	}
-
-	if (rsize) {
-		i2c_msgs[1].addr = addr;
-		i2c_msgs[1].flags = I2C_M_RD;
-		i2c_msgs[1].buf = rx_buf;
-		i2c_msgs[1].len = rsize;
-	}
-
-	if (buf && rsize)
-		rteipc_send(ctx, i2c_msgs, sizeof(i2c_msgs));
-	else if (buf)
-		rteipc_send(ctx, &i2c_msgs[0], sizeof(i2c_msgs[0]));
-	else if (rsize)
-		rteipc_send(ctx, &i2c_msgs[1], sizeof(i2c_msgs[1]));
-
+	rteipc_i2c_send(ctx, addr, tx_buf, i, rsize);
 	rteipc_setcb(ctx, read_i2c, NULL, base, 0);
-	if (rsize)
-		rteipc_dispatch(NULL);
-	else
-		rteipc_dispatch(&tv);
+	rteipc_dispatch(!rsize ? &tv : NULL);
 	rteipc_shutdown();
 }

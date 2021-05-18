@@ -70,12 +70,10 @@ void main(int argc, char **argv)
 
 	if (wr) {
 		/* Request writing */
-		snprintf(buf, sizeof(buf), "%s=%s", argv[2], argv[3]);
-		rteipc_send(ctx, buf, strlen(buf));
+		rteipc_sysfs_send(ctx, argv[2], argv[3]);
 	}
 	/* Request reading to show the current value of the attribute */
-	snprintf(buf, sizeof(buf), "%s", argv[2]);
-	rteipc_send(ctx, buf, strlen(buf));
+	rteipc_sysfs_send(ctx, argv[2], NULL /* NULL for reading value */);
 	rteipc_setcb(ctx, read_sysfs, NULL, base, 0);
 	rteipc_dispatch(NULL);
 	rteipc_shutdown();
