@@ -145,8 +145,8 @@ int rteipc_port_setcb(int desc, const char *key, rteipc_port_handler cb)
 }
 
 /**
- * rteipc_xfer - transfer data to the port of the switch specified by 'desc'
- *               and 'key'
+ * rteipc_xfer - generic function to transfer data to the port of the switch
+ *               specified by 'desc' and 'key'
  * @desc: switch descriptor
  * @key: port key
  * @data: buffer containing data
@@ -160,8 +160,130 @@ int rteipc_xfer(int desc, const char *key, void *data, size_t len)
 		fprintf(stderr, "No such port found in the switch\n");
 		return -1;
 	}
-	rteipc_buffer(port->ep->bev, data, len);
-	return 0;
+	return rteipc_buffer(port->ep->bev, data, len);
+}
+
+/**
+ * rteipc_evxfer - another version of rteipc_xfer using evbuffer instead of
+ *                 void pointer to transfer data
+ * @desc: switch descriptor
+ * @key: port key
+ * @buf: evbuffer containing data
+ */
+int rteipc_evxfer(int desc, const char *key, struct evbuffer *buf)
+{
+	struct rteipc_port *port;
+
+	if (!(port = find_port(desc, key))) {
+		fprintf(stderr, "No such port found in the switch\n");
+		return -1;
+	}
+	return rteipc_evbuffer(port->ep->bev, buf);
+}
+
+/**
+ * rteipc_gpio_xfer - helper function to transfer data to the port of the
+ *                    switch specified by 'desc' and 'key' which is bound to
+ *                    GPIO endpoint
+ * @desc: switch descriptor
+ * @key: port key
+ * @value: GPIO value, 1(assert) or 0(deassert)
+ */
+int rteipc_gpio_xfer(int desc, const char *key, uint8_t value)
+{
+	struct evbuffer *buf = evbuffer_new();
+	int ret;
+
+	if (value > 1) {
+		fprintf(stderr, "Warn: gpio value must be 0 or 1\n");
+		value = 1;
+	}
+	evbuffer_add(buf, &value, sizeof(value));
+	ret = rteipc_evxfer(desc, key, buf);
+	evbuffer_free(buf);
+	return ret;
+}
+
+/**
+ * rteipc_spi_xfer - helper function to transfer data to the port of the
+ *                   switch specified by 'desc' and 'key' which is bound to
+ *                   SPI endpoint
+ * @desc: switch descriptor
+ * @key: port key
+ * @data: data to be sent
+ * @len: length of data
+ * @rdmode: If true, return data from SPI device via rteipc_read_cb
+ */
+int rteipc_spi_xfer(int desc, const char *key, const uint8_t *data,
+					uint16_t len, bool rdmode)
+{
+	struct evbuffer *buf = evbuffer_new();
+	uint8_t rdflag = (rdmode) ? 1 : 0;
+	int ret;
+
+	evbuffer_add(buf, &len, sizeof(len));
+	evbuffer_add(buf, &rdflag, sizeof(rdflag));
+	if (len && data)
+		evbuffer_add(buf, data, len);
+	ret = rteipc_evxfer(desc, key, buf);
+	evbuffer_free(buf);
+	return ret;
+}
+
+/**
+ * rteipc_i2c_xfer - helper function to transfer data to the port of the
+ *                   switch specified by 'desc' and 'key' which is bound to
+ *                   I2C endpoint
+ * @desc: switch descriptor
+ * @key: port key
+ * @addr: I2C slave address
+ * @data: tx buffer
+ * @wlen: length of tx buffer to be sent
+ * @rlen: length of buffer to be received
+ */
+int rteipc_i2c_xfer(int desc, const char *key, uint16_t addr,
+			const uint8_t *data, uint16_t wlen, uint16_t rlen)
+{
+	struct evbuffer *buf = evbuffer_new();
+	int ret;
+
+	evbuffer_add(buf, &addr, sizeof(addr));
+	evbuffer_add(buf, &wlen, sizeof(wlen));
+	evbuffer_add(buf, &rlen, sizeof(rlen));
+	if (wlen && data)
+		evbuffer_add(buf, data, wlen);
+	ret = rteipc_evxfer(desc, key, buf);
+	evbuffer_free(buf);
+	return ret;
+}
+
+/**
+ * rteipc_sysfs_xfer - helper function to transfer data to the port of the
+ *                     switch specified by 'desc' and 'key' which is bound to
+ *                     SYSFS endpoint
+ * @desc: switch descriptor
+ * @key: port key
+ * @attr: name of attribute
+ * @val: value
+ */
+int rteipc_sysfs_xfer(int desc, const char *key, uint16_t addr,
+				const char *attr, const char *val)
+{
+	struct evbuffer *buf;
+	int ret;
+
+	if (!attr) {
+		fprintf(stderr, "Invalid arguments: attr cannot be NULL\n");
+		return -1;
+	}
+
+	buf = evbuffer_new();
+	evbuffer_add_printf(buf, "%s", attr);
+	if (val)
+		evbuffer_add_printf(buf, "=%s", val);
+	ret = rteipc_evxfer(desc, key, buf);
+	evbuffer_free(buf);
+	return ret;
 }
 
 int rteipc_port(int desc, const char *key)

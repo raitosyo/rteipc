@@ -123,18 +123,12 @@ out:
 	return ret;
 }
 
-int rteipc_evsend(int id, struct evbuffer *buf)
-{
-	struct rteipc_ctx *ctx = dtbl_get(&ctx_tbl, id);
-
-	if (!ctx) {
-		fprintf(stderr, "Invalid connection id:%d\n", id);
-		return -1;
-	}
-
-	return rteipc_evbuffer(ctx->bev, buf);
-}
-
+/**
+ * rteipc_send - generic function to send data to an endpoint
+ * @id: context id
+ * @data: data to be sent
+ * @len: length of data
+ */
 int rteipc_send(int id, const void *data, size_t len)
 {
 	struct rteipc_ctx *ctx = dtbl_get(&ctx_tbl, id);
@@ -143,8 +137,114 @@ int rteipc_send(int id, const void *data, size_t len)
 		fprintf(stderr, "Invalid connection id:%d\n", id);
 		return -1;
 	}
-
 	return rteipc_buffer(ctx->bev, data, len);
+}
+
+/**
+ * rteipc_evsend - another version of rteipc_send using evbuffer instead of
+ *                 void pointer to send data
+ * @id: context id
+ * @buf: evbuffer containing data
+ */
+int rteipc_evsend(int id, struct evbuffer *buf)
+{
+	struct rteipc_ctx *ctx = dtbl_get(&ctx_tbl, id);
+
+	if (!ctx) {
+		fprintf(stderr, "Invalid connection id:%d\n", id);
+		return -1;
+	}
+	return rteipc_evbuffer(ctx->bev, buf);
+}
+
+/**
+ * rteipc_gpio_send - helper function to send data to GPIO endpoint
+ * @id: context id
+ * @value: GPIO value, 1(assert) or 0(deassert)
+ */
+int rteipc_gpio_send(int id, uint8_t value)
+{
+	struct evbuffer *buf = evbuffer_new();
+	int ret;
+
+	if (value > 1) {
+		fprintf(stderr, "Warn: gpio value must be 0 or 1\n");
+		value = 1;
+	}
+	evbuffer_add(buf, &value, sizeof(value));
+	ret = rteipc_evsend(id, buf);
+	evbuffer_free(buf);
+	return ret;
+}
+/**
+ * rteipc_spi_send - helper function to send data to SPI endpoint
+ * @id: context id
+ * @data: data to be sent
+ * @len: length of data
+ * @rdmode: If true, return data from SPI device via rteipc_read_cb
+ */
+int rteipc_spi_send(int id, const uint8_t *data, uint16_t len, bool rdmode)
+{
+	struct evbuffer *buf = evbuffer_new();
+	uint8_t rdflag = (rdmode) ? 1 : 0;
+	int ret;
+
+	evbuffer_add(buf, &len, sizeof(len));
+	evbuffer_add(buf, &rdflag, sizeof(rdflag));
+	if (len && data)
+		evbuffer_add(buf, data, len);
+	ret = rteipc_evsend(id, buf);
+	evbuffer_free(buf);
+	return ret;
+}
+
+/**
+ * rteipc_i2c_send - helper function to send data to I2C endpoint
+ * @id: context id
+ * @addr: I2C slave address
+ * @data: data to be sent
+ * @wlen: length of data
+ * @rlen: length of buffer for receiving
+ */
+int rteipc_i2c_send(int id, uint16_t addr, const uint8_t *data,
+					uint16_t wlen, uint16_t rlen)
+{
+	struct evbuffer *buf = evbuffer_new();
+	int ret;
+
+	evbuffer_add(buf, &addr, sizeof(addr));
+	evbuffer_add(buf, &wlen, sizeof(wlen));
+	evbuffer_add(buf, &rlen, sizeof(rlen));
+	if (wlen && data)
+		evbuffer_add(buf, data, wlen);
+	ret = rteipc_evsend(id, buf);
+	evbuffer_free(buf);
+	return ret;
+}
+
+/**
+ * rteipc_sysfs_send - helper function to send data to SYSFS endpoint
+ * @id: context id
+ * @attr: name of attribute
+ * @val: value
+ */
+int rteipc_sysfs_send(int id, const char *attr, const char *val)
+{
+	struct evbuffer *buf;
+	int ret;
+
+	if (!attr) {
+		fprintf(stderr, "Invalid arguments: attr cannot be NULL\n");
+		return -1;
+	}
+
+	buf = evbuffer_new();
+	evbuffer_add_printf(buf, "%s", attr);
+	if (val)
+		evbuffer_add_printf(buf, "=%s", val);
+	ret = rteipc_evsend(id, buf);
+	evbuffer_free(buf);
+	return ret;
 }
 
 int rteipc_connect(const char *uri)
