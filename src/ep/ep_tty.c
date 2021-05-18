@@ -20,6 +20,16 @@
 #include "ep.h"
 #include "message.h"
 
+/**
+ * TTY endpoint
+ *
+ * Data format:
+ *   Input  { char[] }
+ *     arg1 - tx buffer
+ *
+ *   Output { char[] }
+ *     arg1 - rx buffer
+ */
 
 struct tty_data {
 	int fd;

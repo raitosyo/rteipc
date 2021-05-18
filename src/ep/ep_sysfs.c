@@ -21,6 +21,17 @@
 #include "ep.h"
 #include "message.h"
 
+/**
+ * SYSFS endpoint
+ *
+ * Data format:
+ *   Input  { char[] }
+ *     arg1 - string as 'attr=value' pair for setting or 'attr' for reading
+ *            value
+ *
+ *   Output { char[] }
+ *     arg1 - 'attr=value' string if a read requested
+ */
 
 struct sysfs_data {
 	struct udev_device *device;

@@ -21,11 +21,18 @@
 #include "ep.h"
 #include "message.h"
 
-
-/*
- * NOTE: EP_SPI might affect the performance of other endpoints in the context
- * where EP_SPI is processed (i.e., using the same event_base) because of no
- * async I/O support like in the spidev linux driver at this time.
+/**
+ * SPI endpoint
+ *
+ * Data format:
+ *   Input  { uint16_t, uint8_t, uint8_t[] }
+ *     arg1 - SPI tx buffer size
+ *     arg2 - RD flag, if true, return rx buffer, otherwise discard data
+ *            in rx buffer
+ *     arg3 - SPI tx buffer
+ *
+ *   Output { uint8_t[] }
+ *     arg1 - SPI rx buffer, if RD flag is set
  */
 
 struct spi_data {
@@ -36,10 +43,12 @@ static void spidev_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 {
 	struct spi_data *data = self->data;
 	struct evbuffer *in = bufferevent_get_input(bev);
-	char *msg;
+	struct spi_ioc_transfer *xfer = NULL;
+	char *msg, *pos;
+	uint16_t wlen;
+	uint8_t rdflag, *rx_buf = NULL;
 	size_t len, nl, num;
 	int ret, i;
-	struct spi_ioc_transfer *xfer;
 
 	for (;;) {
 		if (!(ret = rteipc_msg_drain(in, &len, &msg)))
@@ -50,25 +59,53 @@ static void spidev_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 			return;
 		}
 
-		if (len % sizeof(*xfer)) {
+		if (len < sizeof(wlen) + sizeof(rdflag)) {
 			fprintf(stderr, "data size is odd\n");
 			goto free_msg;
 		}
 
-		for (i = 0, num = len / sizeof(*xfer); i < num; i++) {
-			xfer = (struct spi_ioc_transfer *)msg + i;
+		pos = msg;
+		wlen = *((uint16_t *)pos);   /* arg1 */
+		pos += sizeof(wlen);
+		rdflag = *((uint8_t *)pos);  /* arg2 */
+		pos += sizeof(rdflag);
+		/* below, pos points to tx data(arg3) */
 
-			if (ioctl(data->fd, SPI_IOC_MESSAGE(1), xfer) < 0) {
-				fprintf(stderr, "Error writing data to spidev\n");
+		if (pos + wlen != msg + len) {
+			fprintf(stderr, "Invalid arguments\n");
+			goto free_msg;
+		}
+
+		rx_buf = malloc(wlen);
+		xfer = malloc(sizeof(*xfer) * wlen);
+		if (!rx_buf || !xfer) {
+			fprintf(stderr, "Failed to allocate memory\n");
+			goto free_msg;
+		}
+
+		for (i = 0; i < wlen; i++) {
+			xfer[i].tx_buf = (unsigned long)&pos[i];
+			xfer[i].rx_buf = (unsigned long)&rx_buf[i];
+			xfer[i].len = 1;
+
+			if (ioctl(data->fd, SPI_IOC_MESSAGE(1),
+						&xfer[i]) < 0) {
+				fprintf(stderr,
+					"Error writing data to spidev(%d)\n",
+					errno);
 				goto free_msg;
 			}
+		}
 
-			if (self->bev && xfer->rx_buf) {
-				rteipc_buffer(self->bev,
-					      (void *)xfer->rx_buf, xfer->len);
-			}
+		if (self->bev && rdflag) {
+			/* return rx_buf if requested */
+			rteipc_buffer(self->bev, (void *)rx_buf, wlen);
 		}
 free_msg:
+		if (rx_buf)
+			free(rx_buf);
+		if (xfer)
+			free(xfer);
 		free(msg);
 	}
 }

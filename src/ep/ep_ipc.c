@@ -87,6 +87,13 @@ static void listen_cb(struct evconnlistener *el, evutil_socket_t fd,
 		bufferevent_flush(self->bev, EV_READ, BEV_FLUSH);
 }
 
+/**
+ * IPC endpoint data format
+ *
+ *   Input:  { ANY }
+ *   Output: { ANY }
+ *     data format is defined by the end users (i.e, process)
+ */
 static void ipc_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 {
 	struct ipc_data *data = self->data;

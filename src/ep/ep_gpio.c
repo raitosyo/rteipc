@@ -21,6 +21,20 @@
 #include "ep.h"
 #include "message.h"
 
+/**
+ * GPIO endpoint
+ *
+ * Data format:
+ *   (Only for gpio-out direction)
+ *   Input  { uint8_t }
+ *     arg1 - GPIO value, 1(assert) or 0(deassert)
+ *
+ *   (Only for gpio-in direction)
+ *   Output { int8_t, int64_t, int64_t }
+ *     arg1 - GPIO value, 1(assert) or 0(deassert)
+ *     arg2 - time of event occurrence (sec)
+ *     arg3 - time of event occurrence (nsec)
+ */
 
 struct gpio_data {
 	struct gpiod_chip *chip;
@@ -29,9 +43,8 @@ struct gpio_data {
 	struct event *ev;
 };
 
-/*
- * Send data from GPIO endpoint to the other endpoint to which it's
- * bound.
+/**
+ * GPIO event handling
  */
 static void upstream(evutil_socket_t fd, short what, void *arg)
 {
@@ -40,37 +53,37 @@ static void upstream(evutil_socket_t fd, short what, void *arg)
 	struct gpiod_line_event ev;
 	struct evbuffer *buf = evbuffer_new();
 	size_t nl;
-	int val;
+	uint8_t value;
 
 	if (gpiod_line_event_read(data->line, &ev) < 0) {
 		fprintf(stderr, "Error reading gpio event\n");
 		goto err;
 	}
 
+	/* discard the event if it's not bound yet */
 	if (!self->bev)
 		return;
 
-	evbuffer_add(buf, &ev, sizeof(ev));
-	nl = htonl(sizeof(ev));
+	value = (ev.event_type == GPIOD_LINE_EVENT_RISING_EDGE ? 1 : 0);
+	evbuffer_add(buf, &value, sizeof(value));                  /* arg1 */
+	evbuffer_add(buf, &ev.ts.tv_sec, sizeof(ev.ts.tv_sec));    /* arg2 */
+	evbuffer_add(buf, &ev.ts.tv_nsec, sizeof(ev.ts.tv_nsec));  /* arg3 */
+	nl = htonl(evbuffer_get_length(buf));
 	evbuffer_prepend(buf, &nl, 4);
 	bufferevent_write_buffer(self->bev, buf);
 	return;
-
 err:
 	event_del(data->ev);
 	return;
 }
 
-/*
- * Process data from the other endpoint to which GPIO endpoint is bound.
- * The data must be either '1' or '0'.
- */
 static void gpio_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 {
 	struct gpio_data *data = self->data;
 	struct evbuffer *in = bufferevent_get_input(bev);
 	char *msg;
 	size_t len;
+	uint8_t value;
 	int ret;
 
 	for (;;) {
@@ -83,18 +96,18 @@ static void gpio_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 		}
 
 		if (!data->out) {
-			fprintf(stderr, "Cannot write against an input GPIO\n");
+			fprintf(stderr, "Cannot write to an input GPIO\n");
 			goto free_msg;
 		}
 
-		if (len != 1 || (*msg != '1' && *msg != '0')) {
-			fprintf(stderr,
-				"Warn: ep_gpio cannot understand:%.*s\n",
-				len, msg);
+		value = *((uint8_t *)msg);  /* arg1 */
+
+		if (len != sizeof(uint8_t) || value > 1) {
+			fprintf(stderr, "Invalid argument\n");
 			goto free_msg;
 		}
 
-		gpiod_line_set_value(data->line, *msg == '1' ? 1 : 0);
+		gpiod_line_set_value(data->line, value);
 free_msg:
 		free(msg);
 	}
