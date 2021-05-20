@@ -25,10 +25,14 @@ static ev_uint32_t msg_length(struct evbuffer *buf)
 }
 
 /**
- * rteipc_msg_drain - remove a message from an evbuffer and copy it to @msg_out
+ * rteipc_msg_drain - remove a message from an evbuffer and copy it to
+ *                    @msg_out
  * @buf: evbuffer from which data removed
  * @size_out: message data length
- * @msg_out: buffer allocated and filled with data, must be free()ed by caller
+ * @msg_out: buffer allocated and filled with data, must be free()ed by
+ *           caller
+ *
+ * Return 1 on success, 0 if buffer is empty, otherwise -1 on error.
  */
 int rteipc_msg_drain(struct evbuffer *buf, size_t *size_out, char **msg_out)
 {
