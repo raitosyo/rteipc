@@ -145,7 +145,7 @@ static int gpio_open(struct rteipc_ep *self, const char *path)
 
 	line = gpiod_chip_get_line(chip, num);
 	if (!line) {
-		fprintf(stderr, "Failed to get num=%s of %s\n",
+		fprintf(stderr, "Failed to get num=%d of %s\n",
 				num, chip_path);
 		goto free_chip;
 	}
