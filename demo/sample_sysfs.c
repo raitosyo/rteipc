@@ -47,7 +47,6 @@ void main(int argc, char **argv)
 {
 	const char *ipc = "ipc://@/sample_sysfs";
 	struct event_base *base = event_base_new();
-	char buf[256];
 	int ctx;
 	bool wr;
 
