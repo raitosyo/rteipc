@@ -295,19 +295,22 @@ int rteipc_connect(const char *uri)
 		addrlen = addrlen - 1;
 	}
 
+	pthread_mutex_unlock(&ctx_mutex);
+
 	err = bufferevent_socket_connect(bev,
 			(struct sockaddr *)&addr, addrlen);
 
 	if (err < 0) {
 		fprintf(stderr, "Failed to connect to %s\n", uri);
-		goto unreg_ctx;
+		/*
+		 * connect_event_cb already free()ed 'ctx' and 'bev' on error.
+		 * So just return here.
+		 */
+		return -1;
 	}
 
-	pthread_mutex_unlock(&ctx_mutex);
 	return id;
 
-unreg_ctx:
-	dtbl_del(&ctx_tbl, id);
 free_ctx:
 	free(ctx);
 	pthread_mutex_unlock(&ctx_mutex);
