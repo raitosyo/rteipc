@@ -58,12 +58,10 @@ static void connect_event_cb(struct bufferevent *bev, short events, void *arg)
 		if (ctx->err_cb)
 			ctx->err_cb(id, events, ctx->arg);
 		free(ctx);
+		event_base_loopbreak(__base);
 	}
 
 	pthread_mutex_unlock(&ctx_mutex);
-
-	if (!(ctx->flag & RTEIPC_NO_EXIT_ON_ERR))
-		event_base_loopbreak(__base);
 }
 
 static void connect_read_cb(struct bufferevent *bev, void *arg)

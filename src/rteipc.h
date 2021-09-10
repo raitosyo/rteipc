@@ -9,6 +9,7 @@
 #include <event2/event.h>
 #include <event2/buffer.h>
 
+/* Deprecated. This flag is no effect. */
 #define RTEIPC_NO_EXIT_ON_ERR		(1 << 0)
 
 typedef void (*rteipc_read_cb)(int ctx, void *data, size_t len, void *arg);
