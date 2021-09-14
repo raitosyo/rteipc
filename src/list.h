@@ -10,6 +10,7 @@
 #define LIST_INITIALIZER \
 	{ NULL, NULL }
 
+/* Iterate over a list and do body statements */
 #define list_each(list, node, body)                   \
 	{                                             \
 		iterator_t *it = iterator_new(list);  \
@@ -18,6 +19,10 @@
 		}                                     \
 		iterator_destroy(it);                 \
 	}
+
+/* Return a pointer to the list item whose node_t member's name is 'node' */
+#define list_entry(node_ptr, type) \
+	(type *)((char *)(node_ptr) - (char *)&((type *)0)->node)
 
 typedef struct node {
 	struct node *prev;
