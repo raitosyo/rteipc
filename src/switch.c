@@ -266,8 +266,8 @@ int rteipc_i2c_xfer(int desc, const char *key, uint16_t addr,
  * @attr: name of attribute
  * @val: value
  */
-int rteipc_sysfs_xfer(int desc, const char *key, uint16_t addr,
-				const char *attr, const char *val)
+int rteipc_sysfs_xfer(int desc, const char *key, const char *attr,
+			const char *val)
 {
 	struct evbuffer *buf;
 	int ret;

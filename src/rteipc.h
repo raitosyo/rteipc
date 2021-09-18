@@ -52,7 +52,7 @@ int rteipc_i2c_xfer(int desc, const char *key, uint16_t addr,
 			const uint8_t *data, uint16_t wlen, uint16_t rlen);
 int rteipc_spi_xfer(int desc, const char *key, const uint8_t *data,
 			uint16_t len, bool rdmode);
-int rteipc_sysfs_xfer(int desc, const char *key, uint16_t addr,
-			const char *attr, const char *val);
+int rteipc_sysfs_xfer(int desc, const char *key, const char *attr,
+			const char *val);
 
 #endif /* _RTEIPC_H */
