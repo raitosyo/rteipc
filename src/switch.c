@@ -152,7 +152,7 @@ int rteipc_port_setcb(int desc, const char *key, rteipc_port_handler cb)
  * @data: buffer containing data
  * @len: length of buffer to be sent
  */
-int rteipc_xfer(int desc, const char *key, void *data, size_t len)
+int rteipc_xfer(int desc, const char *key, const void *data, size_t len)
 {
 	struct rteipc_port *port;
 

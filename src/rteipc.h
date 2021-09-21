@@ -45,7 +45,7 @@ int rteipc_sw_setcb(int sw, rteipc_sw_handler cb);
 int rteipc_port(int sw, const char *key);
 int rteipc_port_setcb(int sw, const char *key, rteipc_port_handler cb);
 
-int rteipc_xfer(int sw, const char *key, void *data, size_t len);
+int rteipc_xfer(int sw, const char *key, const void *data, size_t len);
 int rteipc_evxfer(int desc, const char *key, struct evbuffer *buf);
 int rteipc_gpio_xfer(int desc, const char *key, uint8_t value);
 int rteipc_i2c_xfer(int desc, const char *key, uint16_t addr,
