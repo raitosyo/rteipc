@@ -264,7 +264,7 @@ int rteipc_i2c_xfer(int desc, const char *key, uint16_t addr,
  * @desc: switch descriptor
  * @key: port key
  * @attr: name of attribute
- * @val: value
+ * @val: new value of attribute
  */
 int rteipc_sysfs_xfer(int desc, const char *key, const char *attr,
 			const char *val)

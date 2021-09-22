@@ -224,7 +224,7 @@ int rteipc_i2c_send(int id, uint16_t addr, const uint8_t *data,
  * rteipc_sysfs_send - helper function to send data to SYSFS endpoint
  * @id: context id
  * @attr: name of attribute
- * @val: value
+ * @val: new value of attribute
  */
 int rteipc_sysfs_send(int id, const char *attr, const char *val)
 {
