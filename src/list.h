@@ -20,9 +20,9 @@
 		iterator_destroy(it);                 \
 	}
 
-/* Return a pointer to the list item whose node_t member's name is 'node' */
-#define list_entry(node_ptr, type) \
-	(type *)((char *)(node_ptr) - (char *)&((type *)0)->node)
+/* Return a pointer to the list item */
+#define list_entry(node_ptr, type, member) \
+	(type *)((char *)(node_ptr) - (char *)&((type *)0)->member)
 
 typedef struct node {
 	struct node *prev;
