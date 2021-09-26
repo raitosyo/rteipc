@@ -20,6 +20,8 @@ jobs:
           libevent-dev
           libgpiod-dev
           libudev-dev
+          libyaml-dev
+          libb64-dev
           cmake
       - run: mkdir build; cd build; cmake ..; cmake --build .
 
