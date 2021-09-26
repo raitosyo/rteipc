@@ -3,7 +3,7 @@ exec_prefix=${prefix}
 includedir=${prefix}/include
 libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 
-Name: @PACKAGE@
+Name: @CMAKE_PROJECT_NAME@
 Description: @PACKAGE_DESCRIPTION@
 Version: @PACKAGE_VERSION@
 Requires:
