@@ -32,6 +32,7 @@ static struct rteipc_ep_ops *ep_ops_list[] = {
 	[EP_SPI] = &spi_ops,
 	[EP_I2C] = &i2c_ops,
 	[EP_SYSFS] = &sysfs_ops,
+	[EP_INET]  = &ipc_ops,
 };
 
 static dtbl_t ep_tbl = DTBL_INITIALIZER(MAX_NR_EP);

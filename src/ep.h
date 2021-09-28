@@ -48,9 +48,10 @@
 #define EP_SPI		4
 #define EP_I2C		5
 #define EP_SYSFS	6
+#define EP_INET		7  /* EP_INET is implemented as an EP_IPC extention */
 
 #define COMPAT_ANY		(~0)
-#define COMPAT_IPC		(1 << EP_IPC)
+#define COMPAT_IPC		((1 << EP_IPC)|(1 << EP_INET))
 #define COMPAT_TTY		(1 << EP_TTY)
 #define COMPAT_GPIO		(1 << EP_GPIO)
 #define COMPAT_SPI		(1 << EP_SPI)

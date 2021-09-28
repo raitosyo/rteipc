@@ -19,6 +19,7 @@ static const struct ep_to_str name_tbl[] = {
 	{EP_SPI,      "SPI"},
 	{EP_I2C,      "I2C"},
 	{EP_SYSFS,    "SYSFS"},
+	{EP_INET,     "INET"},
 };
 
 static inline const char *type_to_str(int type)
@@ -82,6 +83,8 @@ int rteipc_open(const char *uri)
 
 	if (!strcmp(protocol, "ipc")) {
 		type = EP_IPC;
+	} else if (!strcmp(protocol, "inet")) {
+		type = EP_INET;
 	} else if (!strcmp(protocol, "tty")) {
 		type = EP_TTY;
 	} else if (!strcmp(protocol, "gpio")) {

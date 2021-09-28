@@ -35,12 +35,12 @@ In rteipc, an endpoint (EP) is a common interface with a process, file, or perip
        |    +------------+  bound  +------------+    |
        |                                             |
        +---->'Backend'<-----+        'Backend'<------+
-            (Unix Soket)    |        (Device)  read/write
+            (Unix Socket)   |        (Device)  read/write
                             |
                process <----+
                         read/write
 
-###### _Backend_ supported by rteipc: _Unix domain socket_, _sysfs file_, _GPIO_, _TTY_, _I2C_, and _SPI_.
+###### _Backend_ supported by rteipc: _socket (Unix domain or Internet)_, _sysfs file_, _GPIO_, _TTY_, _I2C_, and _SPI_.
 
 ##### int rteipc_open(const char *uri)
 
@@ -48,6 +48,7 @@ rteipc_open() creates endpoints for backends supported. The return value is an e
 
       "ipc://@socket-name"                            (UNIX domain socket in abstract namespace)
       "ipc:///tmp/path-name"                          (UNIX domain socket bound to a filesystem pathname)
+      "inet://0.0.0.0:9110"                           (Internet socket for all IPv4 addresses and tcp port 9110)
       "sysfs://pwm:pwmchip0"                          (PWM1 via sysfs)
       "gpio://consumer-name@/dev/gpiochip0-1,out,lo"  (GPIO_01 is configured as direction:out, value:0)
       "gpio://consumer-name@/dev/gpiochip0-1,in"      (GPIO_01 is configured as direction:in)

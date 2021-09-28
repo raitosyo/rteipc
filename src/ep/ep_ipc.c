@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <arpa/inet.h>
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
 #include <event2/listener.h>
@@ -17,6 +18,9 @@
 #include <event2/thread.h>
 #include "ep.h"
 
+
+/* Default port number used by INET endpoint*/
+#define INET_DEFAULT_PORT		9110
 
 struct ipc_data {
 	struct evconnlistener *el;
@@ -107,10 +111,14 @@ static void ipc_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 
 static int ipc_open(struct rteipc_ep *self, const char *path)
 {
-	struct sockaddr_un addr;
+	struct sockaddr *addr;
+	struct sockaddr_in sin;
+	struct sockaddr_un sun;
 	struct ipc_data *data;
 	int abstract = 0;
 	int addrlen;
+	char sip[16] = {0}, sport[6] = {0};
+	long port;
 
 	data = malloc(sizeof(*data));
 	if (!data) {
@@ -119,25 +127,49 @@ static int ipc_open(struct rteipc_ep *self, const char *path)
 	}
 
 	memset(data, 0, sizeof(*data));
-	memset(&addr, 0, sizeof(addr));
-	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
-	addrlen = offsetof(struct sockaddr_un, sun_path) + strlen(path) + 1;
-
-	if (addr.sun_path[0] == '@') {
-		data->abstract = 1;
-		addr.sun_path[0] = 0;
-		addrlen = addrlen - 1;
+	if (self->type == EP_INET) {
+		memset(&sin, 0, sizeof(sin));
+		sscanf(path, "%[^:]:%[^:]", sip, sport);
+		sin.sin_family = AF_INET;
+		if (inet_pton(AF_INET, sip,  &sin.sin_addr.s_addr) != 1) {
+			fprintf(stderr, "Invalid ip address\n");
+			goto out;
+		}
+		if (!strlen(sport)) {
+			sin.sin_port = htons(INET_DEFAULT_PORT);
+		} else {
+			errno = 0;
+			port = strtol(sport, NULL, 10);
+			if (errno) {
+				fprintf(stderr, "Invalid port number\n");
+				goto out;
+			}
+			sin.sin_port = htons(port);
+		}
+		addrlen = sizeof(sin);
+		addr = (struct sockaddr *)&sin;
 	} else {
-		unlink(path);
-		data->path = strdup(path);
+		memset(&sun, 0, sizeof(sun));
+		sun.sun_family = AF_UNIX;
+		strncpy(sun.sun_path, path, sizeof(sun.sun_path) - 1);
+		addrlen = offsetof(struct sockaddr_un, sun_path) + strlen(path) + 1;
+
+		if (sun.sun_path[0] == '@') {
+			data->abstract = 1;
+			sun.sun_path[0] = 0;
+			addrlen = addrlen - 1;
+		} else {
+			unlink(path);
+			data->path = strdup(path);
+		}
+		addr = (struct sockaddr *)&sun;
 	}
 
 	data->el = evconnlistener_new_bind(
 			self->base, listen_cb, (void *)self,
 			(LEV_OPT_REUSEABLE | LEV_OPT_CLOSE_ON_FREE), -1,
-			(struct sockaddr *)&addr, addrlen);
-
+			addr, addrlen);
+out:
 	if (!data->el) {
 		fprintf(stderr, "Could not create a listener\n");
 		return -1;

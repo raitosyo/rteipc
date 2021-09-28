@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <arpa/inet.h>
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
 #include <event2/listener.h>
@@ -249,15 +250,19 @@ int rteipc_connect(const char *uri)
 {
 	struct rteipc_ctx *ctx;
 	struct bufferevent *bev;
-	struct sockaddr_un addr;
+	struct sockaddr *addr;
+	struct sockaddr_un sun;
+	struct sockaddr_in sin;
 	int addrlen;
-	char protocol[16], path[128];
+	char protocol[16] = {0}, path[128] = {0};
+	char sip[16] = {0}, sport[6] = {0};
+	long port;
 	int id, err;
 
-	sscanf(uri, "%[^:]://%99[^:]", protocol, path);
+	sscanf(uri, "%[^:]://%99[^\n]", protocol, path);
 
-	if (strcmp(protocol, "ipc")) {
-		fprintf(stderr, "Unknown protocol:%s\n", protocol);
+	if (strcmp(protocol, "ipc") && strcmp(protocol, "inet")) {
+		fprintf(stderr, "We cannot connect to '%s' endpoint\n", protocol);
 		return -1;
 	}
 
@@ -274,31 +279,56 @@ int rteipc_connect(const char *uri)
 		goto free_bev;
 	}
 
+	if (!strcmp(protocol, "inet")) {
+		memset(&sin, 0, sizeof(sin));
+		sscanf(path, "%[^:]:%[^:]", sip, sport);
+		sin.sin_family = AF_INET;
+		if (inet_pton(AF_INET, sip,  &sin.sin_addr.s_addr) != 1) {
+			fprintf(stderr, "Invalid ip address\n");
+			goto free_ctx;
+		}
+		if (!strlen(sport)) {
+			fprintf(stderr, "port number not specified\n");
+			goto free_ctx;
+		}
+		errno = 0;
+		port = strtol(sport, NULL, 10);
+		if (errno) {
+			fprintf(stderr, "Invalid port number\n");
+			goto free_ctx;
+		}
+		sin.sin_port = htons(port);
+		addrlen = sizeof(sin);
+		addr = (struct sockaddr *)&sin;
+	} else {
+		memset(&sun, 0, sizeof(sun));
+		sun.sun_family = AF_UNIX;
+		strncpy(sun.sun_path, path, sizeof(sun.sun_path) - 1);
+
+		addrlen = offsetof(struct sockaddr_un, sun_path) + strlen(path) + 1;
+		if (sun.sun_path[0] == '@') {
+			sun.sun_path[0] = 0;
+			addrlen = addrlen - 1;
+		}
+		addr = (struct sockaddr *)&sun;
+	}
+
 	pthread_mutex_lock(&ctx_mutex);
 
 	id = dtbl_set(&ctx_tbl, ctx);
-	if (id < 0)
+	if (id < 0) {
+		pthread_mutex_unlock(&ctx_mutex);
 		goto free_ctx;
+	}
 
 	ctx->bev = bev;
 	bufferevent_setcb(bev, connect_read_cb, NULL,
 				connect_event_cb, (void *)(intptr_t)id);
 	bufferevent_enable(bev, EV_READ);
 
-	memset(&addr, 0, sizeof(addr));
-	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
-
-	addrlen = offsetof(struct sockaddr_un, sun_path) + strlen(path) + 1;
-	if (addr.sun_path[0] == '@') {
-		addr.sun_path[0] = 0;
-		addrlen = addrlen - 1;
-	}
-
 	pthread_mutex_unlock(&ctx_mutex);
 
-	err = bufferevent_socket_connect(bev,
-			(struct sockaddr *)&addr, addrlen);
+	err = bufferevent_socket_connect(bev, addr, addrlen);
 
 	if (err < 0) {
 		fprintf(stderr, "Failed to connect to %s\n", uri);
@@ -313,7 +343,6 @@ int rteipc_connect(const char *uri)
 
 free_ctx:
 	free(ctx);
-	pthread_mutex_unlock(&ctx_mutex);
 free_bev:
 	bufferevent_free(bev);
 	return -1;
