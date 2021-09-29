@@ -50,7 +50,7 @@ rteipc_open() creates endpoints for backends supported. The return value is an e
       "ipc:///tmp/path-name"                          (UNIX domain socket bound to a filesystem pathname)
       "inet://0.0.0.0:9110"                           (Internet socket for all IPv4 addresses and tcp port 9110)
       "sysfs://pwm:pwmchip0"                          (PWM1 via sysfs)
-      "gpio://consumer-name@/dev/gpiochip0-1,out,lo"  (GPIO_01 is configured as direction:out, value:0)
+      "gpio://consumer-name@/dev/gpiochip0-1,out,0"   (GPIO_01 is configured as direction:out, value:0)
       "gpio://consumer-name@/dev/gpiochip0-1,in"      (GPIO_01 is configured as direction:in)
       "tty:///dev/ttyS0,115200"                       (/dev/ttyS0 setting speed to 115200 baud)
       "i2c:///dev/i2c-0"                              (I2C-1 device)
