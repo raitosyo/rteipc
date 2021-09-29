@@ -40,7 +40,6 @@ struct sysfs_data {
 static void sysfs_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 {
 	struct sysfs_data *data = self->data;
-	struct udev_list_entry *list_entry;
 	struct evbuffer *in = bufferevent_get_input(bev);
 	const char *value;
 	char *msg, *pos, *text, buf[PATH_MAX];
