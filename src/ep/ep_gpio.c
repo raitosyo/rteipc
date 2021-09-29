@@ -123,7 +123,7 @@ static int gpio_open(struct rteipc_ep *self, const char *path)
 	char chip_path[PATH_MAX] = {0};
 	char dir[4] = {0};
 	int val = 0;
-	int num, fd, ret;
+	int num = 0, fd, ret;
 
 	sscanf(path, "%[^@]@%[^-]-%d,%[^,],%d",
 			consumer, chip_path, &num, dir, &val);
