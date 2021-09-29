@@ -6,9 +6,6 @@
 #include "table.h"
 
 
-#define node_to_entry(n) \
-	(dtbl_entry_t *)((char *)(n) - (char *)&((dtbl_entry_t *)0)->node)
-
 static inline void __set_desc_id(ev_uint64_t *desc, int id)
 {
 	int index = id / DESC_BIT_WIDTH;
@@ -54,6 +51,7 @@ static int __dtbl_next_id(const dtbl_t *table)
 void *dtbl_get(dtbl_t *table, int id)
 {
 	void *retval = NULL;
+	dtbl_entry_t *e;
 	node_t *n;
 
 	if (!table)
@@ -62,7 +60,7 @@ void *dtbl_get(dtbl_t *table, int id)
 	pthread_mutex_lock(&table->lock);
 
 	list_each(&table->entry_list, n, {
-		dtbl_entry_t *e = node_to_entry(n);
+		e = list_entry(n, dtbl_entry_t, node);
 		if (e->id == id) {
 			retval = e->value;
 			break;

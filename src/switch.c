@@ -24,9 +24,6 @@
 
 #define MAX_NR_SW		DESC_BIT_WIDTH
 
-#define node_to_port(n) \
-	(struct rteipc_port *)((char *)(n) - (char *)&((struct rteipc_port *)0)->entry)
-
 extern __thread struct event_base *__base;
 
 struct rteipc_sw {
@@ -60,7 +57,7 @@ static inline struct rteipc_port *find_port(int desc, const char *key)
 		return NULL;
 
 	list_each(&sw->port_list, n, {
-		p = node_to_port(n);
+		p = list_entry(n, struct rteipc_port, entry);
 		if (!strcmp(p->key, key))
 			return p;
 	})
@@ -74,8 +71,10 @@ static void port_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 	struct evbuffer *in = bufferevent_get_input(bev);
 	char *msg;
 	size_t len;
-	int ret;
+	struct rteipc_ep *src, *dest;
+	struct rteipc_port *p;
 	node_t *n;
+	int ret;
 
 	for (;;) {
 		if (!(ret = rteipc_msg_drain(in, &len, &msg)))
@@ -92,10 +91,10 @@ static void port_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 			sw->handler(sw->id, port->key, msg, len);
 		} else {
 			// default handler (broadcast to all compatible ports)
-			struct rteipc_ep *src = get_partner_endpoint(port->ep);
+			src = get_partner_endpoint(port->ep);
 			list_each(&sw->port_list, n, {
-				struct rteipc_port *p = node_to_port(n);
-				struct rteipc_ep *dest = get_partner_endpoint(p->ep);
+				p = list_entry(n, struct rteipc_port, entry);
+				dest = get_partner_endpoint(p->ep);
 				if (p != port && ep_compatible(src, dest))
 					rteipc_buffer(p->ep->bev, msg, len);
 			})
