@@ -168,6 +168,7 @@ static void spidev_close(struct rteipc_ep *self)
 {
 	struct spi_data *data = self->data;
 	close(data->fd);
+	free(data);
 }
 
 COMPATIBLE_WITH(spidev, COMPAT_IPC);

@@ -161,6 +161,7 @@ static int tty_open(struct rteipc_ep *self, const char *path)
 	fd = open_uart(dev, speed);
 	if (fd < 0) {
 		fprintf(stderr, "Failed to open tty\n");
+		free(data);
 		return -1;
 	}
 
@@ -178,6 +179,7 @@ static void tty_close(struct rteipc_ep *self)
 	struct tty_data *data = self->data;
 	event_del(data->ev);
 	close(data->fd);
+	free(data);
 }
 
 COMPATIBLE_WITH(tty, COMPAT_IPC|COMPAT_TTY);

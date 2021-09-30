@@ -194,6 +194,7 @@ static void gpio_close(struct rteipc_ep *self)
 	struct gpio_data *data = self->data;
 	event_del(data->ev);
 	gpiod_chip_close(data->chip);
+	free(data);
 }
 
 COMPATIBLE_WITH(gpio, COMPAT_IPC);

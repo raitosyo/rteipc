@@ -181,6 +181,7 @@ static void i2c_close(struct rteipc_ep *self)
 {
 	struct i2c_data *data = self->data;
 	close(data->fd);
+	free(data);
 }
 
 COMPATIBLE_WITH(i2c, COMPAT_IPC);

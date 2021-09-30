@@ -146,6 +146,7 @@ static void sysfs_close(struct rteipc_ep *self)
 {
 	struct sysfs_data *data = self->data;
 	udev_device_unref(data->device);
+	free(data);
 }
 
 COMPATIBLE_WITH(sysfs, COMPAT_IPC);
