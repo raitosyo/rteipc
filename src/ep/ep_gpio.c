@@ -156,18 +156,18 @@ static int gpio_open(struct rteipc_ep *self, const char *path)
 		ret = gpiod_line_request_output(line, consumer, val);
 		if (ret < 0) {
 			fprintf(stderr, "Failed to request gpio output\n");
-			goto free_line;
+			goto free_chip;
 		}
 	} else if (strlen(dir) == 2 && !strncasecmp(dir, "in", 2)) {
 		ret  = gpiod_line_request_both_edges_events(line, consumer);
 		if (ret < 0) {
 			fprintf(stderr, "Failed to request gpio events\n");
-			goto free_line;
+			goto free_chip;
 		}
 		fd = gpiod_line_event_get_fd(line);
 		if (fd < 0) {
 			fprintf(stderr, "Failed to get gpio event fd\n");
-			goto free_line;
+			goto free_chip;
 		}
 		ev = event_new(self->base, fd, EV_READ | EV_PERSIST,
 			       upstream, self);
@@ -175,15 +175,13 @@ static int gpio_open(struct rteipc_ep *self, const char *path)
 		event_add(ev, NULL);
 	} else {
 		fprintf(stderr, "Invalid path:%s\n", path);
-		goto free_line;
+		goto free_chip;
 	}
 
 	self->data = data;
 
 	return 0;
 
-free_line:
-	gpiod_line_close_chip(line);
 free_chip:
 	gpiod_chip_close(chip);
 free_data:
