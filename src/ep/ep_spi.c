@@ -125,7 +125,7 @@ static int init_spidev(const char *path, int speed, int mode)
 	}
 
 	if (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed) < 0) {
-		fprintf(stderr, "Failed to set spi mode\n");
+		fprintf(stderr, "Failed to set spi speed\n");
 		goto out;
 	}
 
