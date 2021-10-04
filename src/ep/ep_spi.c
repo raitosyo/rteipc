@@ -77,7 +77,7 @@ static void spidev_on_data(struct rteipc_ep *self, struct bufferevent *bev)
 		}
 
 		rx_buf = malloc(wlen);
-		xfer = malloc(sizeof(*xfer) * wlen);
+		xfer = calloc(wlen, sizeof(*xfer));
 		if (!rx_buf || !xfer) {
 			fprintf(stderr, "Failed to allocate memory\n");
 			goto free_msg;
