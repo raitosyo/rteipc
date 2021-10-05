@@ -14,7 +14,7 @@ include(CheckLibraryExists)
 include(CheckCSourceCompiles)
 include(GNUInstallDirs)
 
-set(PACKAGE_VERSION 0.2)
+set(PACKAGE_VERSION 0.2.1)
 
 option(RTEIPC_STATIC_LIB "Build static library instead of shared library." OFF)
 
