@@ -49,15 +49,15 @@ The following figure shows how a process reads/writes from/to a peripheral devic
 
 ## How to use rteipc ?
 
-This guide writes a simple program using rteipc and sends data to an I2C device on the target from the remote host.
-To help set up endpoint configuration on the target device, we use rtemgr (a command-line tool) in the below steps, but of course, it's optional when you write a program that creates all endpoints needed on the target device.
+This guide uses a docker container image, writes a simple program using rteipc, and sends data to an I2C device on the target from the remote host.
+To help set up endpoint configuration on the target device, we use _rtemgr_ (a command-line tool) in the below steps, but it's optional when you write a program that creates all endpoints needed on the target device.
 
-##### Step 1 - Run the rtemgr container image
+##### Step 1 - Run the rtemgr container image on the target device
 ###### First, run the container image in privileged and host network mode to access all devices and networking on the target device.
 
     # docker run --privileged --network=host --rm -it raitosyo/rtemgr
 
-##### Step 2 - Setup endpoints
+##### Step 2 - Set up endpoint
 
 ###### 1. Open an endpoint on the container, for example:
 
@@ -79,12 +79,12 @@ To help set up endpoint configuration on the target device, we use rtemgr (a com
 ###### 2. Example for reading:
 
     (first, request 1 byte from address:0xaa, register:0xbb)
-    # rtemgr xfer my-i2c --addr 0xAA --value "0xBB" --read
+    # rtemgr xfer my-i2c --addr 0xaa --value "0xbb" --read
     # rtemgr cat my-i2c
 
 ##### Step 4 - Reading or Writing from a program
 
-###### 1. Open an endpoint for remote access:
+###### 1. Open an endpoint for remote host access:
 
     (create a TCP socket endpoint)
     # rtemgr open -t inet -n my-inet 0.0.0.0:9999
@@ -94,22 +94,32 @@ To help set up endpoint configuration on the target device, we use rtemgr (a com
     (create data stream between TCP:9999 and I2C endpoint)
     # rtemgr route my-i2c my-inet
 
-    (ensure the two endpoints are routed in 'ROUTE' column)
+    (ensure the two endpoints are routed in the 'ROUTE' column)
     # rtemgr list
     NAME             BUS    PATH                                 ROUTE
     my-i2c           i2c    /dev/i2c-0                           my-inet
     my-inet          inet   0.0.0.0:9999                         my-i2c
 
-###### 3. (On the host machine) Write a program connecting to the target device:
+###### 3. Run the container image on the host machine.
 
-    (The below sample program does the same thing as Step 3)
+    (on your host machine)
+    # docker run --rm -it raitosyo/rtemgr
+
+###### 4. Write a program, compile and run it on the container:
+
+    // i2c_test.c:
+    //   This sample program does the same thing as Step 3.
 
     #include <rteipc.h>
+
+    // Change TARGET_IP to your environment.
+    #define TARGET_IP   "192.168.0.1"
 
     static void read_i2c(int ctx, void *data, size_t len, void *arg)
     {
         struct event_base *base = arg;
-        printf("[ 0x%02x ]\n", (uint_8 *)data);
+        printf("[ 0x%02x ]\n", *(uint8_t *)data);
+        /* Exit eventloop */
         event_base_loopbreak(base);
     }
 
@@ -124,17 +134,21 @@ To help set up endpoint configuration on the target device, we use rtemgr (a com
         rteipc_init(base);
 
         /* Connect to the target device via INET endpoint */
-        ctx = rteipc_connect("inet://<target ip>:9999");
+        ctx = rteipc_connect("inet://" TARGET_IP ":9999");
 
         /* write [0xbb, 0xcc] to address:0xaa */
         rteipc_i2c_send(ctx, addr, tx_buf, sizeof(tx_buf), 0);
         /* request 1 byte from address:0xaa, register:0xbb */
         rteipc_i2c_send(ctx, addr, tx_buf, 1, 1);
-        rteipc_setcb(ctx, read_cb, NULL, base, 0);
+        rteipc_setcb(ctx, read_i2c, NULL, base, 0);
 
         /* Run eventloop */
         rteipc_dispatch(NULL);
     }
+
+    (To compile it and run)
+    # gcc i2c_test.c -o i2c_test $(pkg-config --cflags --libs rteipc libevent)
+    # ./i2c_test
 
 ### API
 
