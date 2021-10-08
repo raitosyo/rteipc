@@ -4,18 +4,6 @@
 
 Event loop library for working with peripherals (e.g., I2C, SPI, and GPIO) on embedded Linux, and help to write programs in the same manner regardless of its bus type.
 
-## Requirements
-
-For debian/ubuntu:
-
-    apt-get install -y cmake g++ gcc make pkg-config \
-        libb64-dev libevent-dev libgpiod-dev libudev-dev libyaml-dev
-
-For Fedora:
-
-    dnf install -y cmake g++ make pkg-config \
-        libb64-devel libevent-devel libgpiod-devel libyaml-devel systemd-devel
-
 ## Building
 
 To create an build in the project tree:
@@ -74,17 +62,17 @@ To help set up endpoint configuration on the target device, we use _rtemgr_ (a c
 ###### 1. Example for writing:
 
     (write [0xbb, 0xcc] to address:0xaa)
-    # rtemgr xfer my-i2c --value "0xbb 0xcc" --addr 0xaa
+    # rtemgr xfer my-i2c --addr 0xaa --value "0xbb 0xcc"
 
 ###### 2. Example for reading:
 
     (first, request 1 byte from address:0xaa, register:0xbb)
-    # rtemgr xfer my-i2c --addr 0xaa --value "0xbb" --read
+    # rtemgr xfer my-i2c --addr 0xaa --value 0xbb --read
     # rtemgr cat my-i2c
 
 ##### Step 4 - Reading or Writing from a program
 
-###### 1. Open an endpoint for remote host access:
+###### 1. Open another endpoint for remote host access:
 
     (create a TCP socket endpoint)
     # rtemgr open -t inet -n my-inet 0.0.0.0:9999
@@ -100,7 +88,7 @@ To help set up endpoint configuration on the target device, we use _rtemgr_ (a c
     my-i2c           i2c    /dev/i2c-0                           my-inet
     my-inet          inet   0.0.0.0:9999                         my-i2c
 
-###### 3. Run the container image on the host machine.
+###### 3. Run a new container image on the host machine:
 
     (on your host machine)
     # docker run --rm -it raitosyo/rtemgr
@@ -167,7 +155,7 @@ rteipc_open() creates endpoints for backends supported. The return value is an e
       "gpio://consumer-name@/dev/gpiochip0-1,out,0"   (GPIO_01 is configured as direction:out, value:0)
       "gpio://consumer-name@/dev/gpiochip0-1,in"      (GPIO_01 is configured as direction:in)
       "tty:///dev/ttyS0,115200"                       (/dev/ttyS0 setting speed to 115200 baud)
-      "i2c:///dev/i2c-0"                              (I2C-1 device)
+      "i2c:///dev/i2c-0"                              (I2C-0 device)
       "spi:///dev/spidev0.0,5000,3"                   (/dev/spidev0.0 setting max speed to 5kHz and SPI mode to 3)
 
 ##### int rteipc_bind(int ep_a, int ep_b)
