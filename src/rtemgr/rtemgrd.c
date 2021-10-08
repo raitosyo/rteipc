@@ -374,7 +374,7 @@ static void iface_managed_handler(struct interface *self, void *data,
 	const char *name;
 	void *value;
 	size_t size;
-	uint8_t *byte_array;
+	uint8_t *byte_array, *new_array;
 	unsigned char *buf;
 	size_t bufsz, written;
 
@@ -436,6 +436,20 @@ static void iface_managed_handler(struct interface *self, void *data,
 		size = hex_to_array(&byte_array, value);
 		if (size) {
 			if (dest->bus_type == EP_SPI) {
+				if (size < d->cmd.val.extra.rsize) {
+					new_array = realloc(byte_array,
+							d->cmd.val.extra.rsize);
+					if (!new_array) {
+						fprintf(stderr,
+							"Failed to expand buf.\n");
+						free(byte_array);
+						goto out;
+					}
+					memset(new_array + size, 0,
+						d->cmd.val.extra.rsize - size);
+					byte_array = new_array;
+					size = d->cmd.val.extra.rsize;
+				}
 				rteipc_spi_xfer(id, name, byte_array, size,
 						!!d->cmd.val.extra.rsize);
 			} else {
