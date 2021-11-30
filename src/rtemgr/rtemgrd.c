@@ -11,8 +11,7 @@
 
 
 /**
- * Domain is a representation of a 'switch' of rteipc that contains
- * interfaces.
+ * Domain is a group of interfaces.
  */
 struct domain {
 	int id;
@@ -22,8 +21,8 @@ struct domain {
 };
 
 /**
- * Interface is a representation of a pair of 'port' and 'endpoint' of rteipc
- * that is bound together.
+ * Interface is a representation of a pair of loopback and other endpoint that
+ * is bound together.
  */
 struct interface;
 typedef void (*iface_handler)(struct interface *self, void *data, size_t len);
@@ -41,12 +40,13 @@ struct interface {
 	node_t node;
 };
 
+static void default_domain_handler(const char *name, void *data, size_t len, void *arg);
 static void iface_raw_handler(struct interface *self, void *data, size_t len);
-
 static void iface_managed_handler(struct interface *self, void *data, size_t len);
 
 /* Default domain */
 struct domain default_domain = {
+	.id = 0,
 	.name = "default",
 	.iface_list = LIST_INITIALIZER,
 };
@@ -238,8 +238,9 @@ int iface_build(struct interface *iface, const char *name, const char *path,
 	strcpy(iface->name, name);
 	snprintf(uri, sizeof(uri), "%s%s", bus_to_prefix(bus_type), path);
 	strcpy(iface->uri, uri);
-	iface->id = rteipc_port(iface->domain->id, iface->name);
+	iface->id = rteipc_open(iface->name);
 	iface->ep = rteipc_open(iface->uri);
+	rteipc_xfer_setcb(iface->name, default_domain_handler, iface);
 	iface->handler = (iface->managed) ?
 		iface_managed_handler : iface_raw_handler;
 
@@ -322,7 +323,7 @@ static void iface_raw_handler(struct interface *self, void *data, size_t len)
 
 	if (!partner->managed) {
 		/* raw to raw interface */
-		rteipc_xfer(partner->domain->id, partner->name, data, len);
+		rteipc_xfer(partner->name, data, len);
 	} else {
 		/* raw to managed interface */
 		bufsz = len * 3 / 2;
@@ -352,8 +353,7 @@ static void iface_raw_handler(struct interface *self, void *data, size_t len)
 			intf->managed = self->managed;
 			strcpy(intf->partner, self->partner->name);
 			if (!rtemgr_data_emit(d, buf, bufsz, &written))
-				rteipc_xfer(partner->domain->id,
-						partner->name, buf, written);
+				rteipc_xfer(partner->name, buf, written);
 		}
 		free(buf);
 		rtemgr_data_free(d);  /* This also free val */
@@ -370,7 +370,6 @@ static void iface_managed_handler(struct interface *self, void *data,
 	rtemgr_data *d;
 	rtemgr_intf *intf;
 	struct interface *dest;
-	int id;
 	const char *name;
 	void *value;
 	size_t size;
@@ -390,7 +389,6 @@ static void iface_managed_handler(struct interface *self, void *data,
 	if (!dest)
 		goto out;
 
-	id = dest->domain->id;
 	name = dest->name;
 	value = d->cmd.val.v;
 	size = d->cmd.val.s;
@@ -403,7 +401,7 @@ static void iface_managed_handler(struct interface *self, void *data,
 	case EP_TTY:
 	case EP_SYSFS:
 		if (!dest->managed) {
-			rteipc_xfer(id, name, value, size);
+			rteipc_xfer(name, value, size);
 		} else {
 			/* managed to managed interface */
 			bufsz = len + 512;
@@ -421,14 +419,13 @@ static void iface_managed_handler(struct interface *self, void *data,
 				if (self->partner)
 					strcpy(intf->partner, self->partner->name);
 				if (!rtemgr_data_emit(d, buf, bufsz, &written))
-					rteipc_xfer(id, name, buf, written);
+					rteipc_xfer(name, buf, written);
 				free(buf);
 			}
 		}
 		break;
 	case EP_GPIO:
-		rteipc_gpio_xfer(id, name,
-				strmatch(value, "0") ? 0 : 1);
+		rteipc_gpio_xfer(name, strmatch(value, "0") ? 0 : 1);
 		break;
 	case EP_SPI:
 	case EP_I2C:
@@ -450,10 +447,10 @@ static void iface_managed_handler(struct interface *self, void *data,
 					byte_array = new_array;
 					size = d->cmd.val.extra.rsize;
 				}
-				rteipc_spi_xfer(id, name, byte_array, size,
+				rteipc_spi_xfer(name, byte_array, size,
 						!!d->cmd.val.extra.rsize);
 			} else {
-				rteipc_i2c_xfer(id, name,
+				rteipc_i2c_xfer(name,
 						d->cmd.val.extra.addr,
 						byte_array, size,
 						d->cmd.val.extra.rsize);
@@ -737,7 +734,7 @@ static void process_ctlport(void *data, size_t len)
 	}
 
 	/* Send reply to client */
-	rteipc_xfer(default_domain.id, RTEMGRD_CTLPORT, buf, written);
+	rteipc_xfer(RTEMGRD_CTLPORT, buf, written);
 out:
 	rtemgr_data_free(d);
 }
@@ -747,19 +744,16 @@ out:
  * An interface-level callback is subsequently invoked except for the control
  * interface that is special.
  */
-static void default_domain_handler(int domain_id, const char *name,
-					void *data, size_t len)
+static void
+default_domain_handler(const char *name, void *data, size_t len, void *arg)
 {
-	struct interface *iface;
+	struct interface *iface = arg;
 
-	if (default_domain.id == domain_id &&
-			strmatch(name, RTEMGRD_CTLPORT)) {
+	if (strmatch(name, RTEMGRD_CTLPORT)) {
 		/* For the control interface */
 		process_ctlport(data, len);
 	} else {
 		/* Invoke an interface-level callback */
-		iface = iface_lookup_by_name(
-				domain_lookup_by_id(domain_id), name);
 		if (iface && iface->handler)
 			iface->handler(iface, data, len);
 	}
@@ -770,15 +764,6 @@ static void rtemgrd(void)
 	/* Initialize rteipc */
 	rteipc_init(NULL);
 
-	/*
-	 * Create default_domain.
-	 */
-	default_domain.id = rteipc_sw();
-
-	/* default_domain is first created switch, hence the id is always 0 */
-	assert(default_domain.id == 0);
-
-	rteipc_sw_setcb(default_domain.id, default_domain_handler);
 	list_push(&domain_list, &default_domain.node);
 
 	/**
@@ -790,12 +775,7 @@ static void rtemgrd(void)
 		goto error;
 
 	/**
-	 * Build control iface as a managed interface.
-	 *
-	 * NOTE:
-	 *   Not like other managed ifaces the control iface is handled by
-	 *   domain handler (i.e. default_domain_handler) not by iface
-	 *   handler.
+	 * Build control iface.
 	 */
 	if (iface_build(ctrl_iface, RTEMGRD_CTLPORT, RTEMGRD_CTLPORT,
 				EP_IPC, 1))
