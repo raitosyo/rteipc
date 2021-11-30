@@ -11,7 +11,6 @@ set(RTEIPC_SOURCES
 
     base.c
     connect.c
-    switch.c
     message.c
     list.c
     table.c

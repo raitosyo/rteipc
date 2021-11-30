@@ -14,10 +14,6 @@
 
 typedef void (*rteipc_read_cb)(int ctx, void *data, size_t len, void *arg);
 typedef void (*rteipc_err_cb)(int ctx, short events, void *arg);
-typedef void (*rteipc_sw_handler)(int sw, const char *key, void *data,
-					size_t len);
-typedef void (*rteipc_port_handler)(int sw, void *data, size_t len);
-
 void rteipc_init(struct event_base *base);
 void rteipc_reinit(void);
 void rteipc_shutdown(void);
@@ -39,20 +35,5 @@ int rteipc_open(const char *uri);
 void rteipc_close(int ep);
 int rteipc_bind(int ea, int eb);
 void rteipc_unbind(int ep);
-
-int rteipc_sw(void);
-int rteipc_sw_setcb(int sw, rteipc_sw_handler cb);
-int rteipc_port(int sw, const char *key);
-int rteipc_port_setcb(int sw, const char *key, rteipc_port_handler cb);
-
-int rteipc_xfer(int sw, const char *key, const void *data, size_t len);
-int rteipc_evxfer(int sw, const char *key, struct evbuffer *buf);
-int rteipc_gpio_xfer(int sw, const char *key, uint8_t value);
-int rteipc_i2c_xfer(int sw, const char *key, uint16_t addr,
-			const uint8_t *data, uint16_t wlen, uint16_t rlen);
-int rteipc_spi_xfer(int sw, const char *key, const uint8_t *data,
-			uint16_t len, bool rdmode);
-int rteipc_sysfs_xfer(int sw, const char *key, const char *attr,
-			const char *newval);
 
 #endif /* _RTEIPC_H */
