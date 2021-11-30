@@ -75,13 +75,17 @@ void rteipc_unbind(int id)
 
 int rteipc_open(const char *uri)
 {
-	char protocol[16], path[128];
+	char protocol[16] = {0}, path[128] = {0};
 	struct rteipc_ep *ep;
 	int type, id;
 
 	sscanf(uri, "%[^:]://%99[^\n]", protocol, path);
 
-	if (!strcmp(protocol, "ipc")) {
+	if (!strstr(uri, "://")) {
+		/* No protocol specified, treated as loopback name */
+		type = EP_LOOP;
+		strncpy(path, uri, sizeof(path));
+	} else if (!strcmp(protocol, "ipc")) {
 		type = EP_IPC;
 	} else if (!strcmp(protocol, "inet")) {
 		type = EP_INET;
