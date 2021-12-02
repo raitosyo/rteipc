@@ -36,7 +36,7 @@ static void usage_exit()
 	exit(1);
 }
 
-static void read_sysfs(int ctx, void *data, size_t len, void *arg)
+static void read_sysfs(const char *name, void *data, size_t len, void *arg)
 {
 	struct event_base *base = arg;
 	printf("%.*s\n", len, data);
@@ -45,9 +45,7 @@ static void read_sysfs(int ctx, void *data, size_t len, void *arg)
 
 void main(int argc, char **argv)
 {
-	const char *ipc = "ipc://@/sample_sysfs";
 	struct event_base *base = event_base_new();
-	int ctx;
 	bool wr;
 
 	if ((argc != 3 && argc != 4) || argv[1] != strstr(argv[1], "sysfs://"))
@@ -57,23 +55,18 @@ void main(int argc, char **argv)
 
 	rteipc_init(base);
 
-	if (rteipc_bind(rteipc_open(ipc), rteipc_open(argv[1]))) {
+	if (rteipc_bind(rteipc_open("lo"), rteipc_open(argv[1]))) {
 		fprintf(stderr, "Failed to bind %s\n", argv[1]);
-		return;
-	}
-
-	if ((ctx = rteipc_connect(ipc)) < 0) {
-		fprintf(stderr, "Failed to connect %s\n", ipc);
 		return;
 	}
 
 	if (wr) {
 		/* Request writing */
-		rteipc_sysfs_send(ctx, argv[2], argv[3]);
+		rteipc_sysfs_xfer("lo", argv[2], argv[3]);
 	}
 	/* Request reading to show the current value of the attribute */
-	rteipc_sysfs_send(ctx, argv[2], NULL /* NULL for reading value */);
-	rteipc_setcb(ctx, read_sysfs, NULL, base, 0);
+	rteipc_sysfs_xfer("lo", argv[2], NULL /* NULL for reading value */);
+	rteipc_xfer_setcb("lo", read_sysfs, base);
 	rteipc_dispatch(NULL);
 	rteipc_shutdown();
 }

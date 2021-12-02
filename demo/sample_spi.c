@@ -8,7 +8,7 @@
 
 #define MAX_BYTES	32
 
-static void read_spi(int ctx, void *data, size_t len, void *arg)
+static void read_spi(const char *name, void *data, size_t len, void *arg)
 {
 	struct event_base *base = arg;
 	uint8_t *byte_array = data;
@@ -23,7 +23,6 @@ static void read_spi(int ctx, void *data, size_t len, void *arg)
 
 void main(int argc, char **argv)
 {
-	const char *ipc = "ipc://@/sample_spi";
 	struct event_base *base = event_base_new();
 	uint8_t tx_buf[MAX_BYTES];
 	int ctx, i = 0;
@@ -39,13 +38,8 @@ void main(int argc, char **argv)
 
 	rteipc_init(base);
 
-	if (rteipc_bind(rteipc_open(ipc), rteipc_open(argv[1]))) {
+	if (rteipc_bind(rteipc_open("lo"), rteipc_open(argv[1]))) {
 		fprintf(stderr, "Failed to bind %s\n", argv[1]);
-		return;
-	}
-
-	if ((ctx = rteipc_connect(ipc)) < 0) {
-		fprintf(stderr, "Failed to connect %s\n", ipc);
 		return;
 	}
 
@@ -58,8 +52,8 @@ void main(int argc, char **argv)
 	} while (i < MAX_BYTES && (hex = strtok(NULL, " ")));
 	printf(" ]\n");
 
-	rteipc_spi_send(ctx, tx_buf, i, true /* receive rx data */);
-	rteipc_setcb(ctx, read_spi, NULL, base, 0);
+	rteipc_spi_xfer("lo", tx_buf, i, true /* read flag */);
+	rteipc_xfer_setcb("lo", read_spi, base);
 	rteipc_dispatch(NULL);
 	rteipc_shutdown();
 }

@@ -27,7 +27,7 @@ static void usage_exit()
 	exit(1);
 }
 
-static void read_i2c(int ctx, void *data, size_t len, void *arg)
+static void read_i2c(const char *name, void *data, size_t len, void *arg)
 {
 	struct event_base *base = arg;
 	uint8_t *byte_array = data;
@@ -42,10 +42,9 @@ static void read_i2c(int ctx, void *data, size_t len, void *arg)
 
 void main(int argc, char **argv)
 {
-	const char *ipc = "ipc://@/sample_i2c";
 	struct event_base *base = event_base_new();
 	uint8_t tx_buf[MAX_BYTES];
-	int ctx, i = 0, c;
+	int i = 0, c;
 	uint16_t rsize = 0, addr = 0;
 	char *uri, *hex, *buf = NULL;
 	struct timeval tv = {0, 1};
@@ -74,13 +73,8 @@ void main(int argc, char **argv)
 
 	rteipc_init(base);
 
-	if (rteipc_bind(rteipc_open(ipc), rteipc_open(uri))) {
+	if (rteipc_bind(rteipc_open("lo"), rteipc_open(uri))) {
 		fprintf(stderr, "Failed to bind %s\n", uri);
-		return;
-	}
-
-	if ((ctx = rteipc_connect(ipc)) < 0) {
-		fprintf(stderr, "Failed to connect %s\n", ipc);
 		return;
 	}
 
@@ -94,8 +88,8 @@ void main(int argc, char **argv)
 		} while (i < MAX_BYTES && (hex = strtok(NULL, " ")));
 		printf(" ]\n");
 	}
-	rteipc_i2c_send(ctx, addr, tx_buf, i, rsize);
-	rteipc_setcb(ctx, read_i2c, NULL, base, 0);
+	rteipc_i2c_xfer("lo", addr, tx_buf, i, rsize);
+	rteipc_xfer_setcb("lo", read_i2c, base);
 	rteipc_dispatch(!rsize ? &tv : NULL);
 	rteipc_shutdown();
 }
