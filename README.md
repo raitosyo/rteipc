@@ -18,27 +18,137 @@ rteipc (Route IPC) transfers data to a peripheral by routing data between two _e
 
 #### Endpoint
 
-An endpoint (EP) represents a process or peripheral and is a standard interface with them. When a process interacts with a peripheral, there must be two EPs, one is for the process and the other for the peripheral, which are bound together to transfer data between them.  
-The following figure shows how a process reads/writes from/to a peripheral device.
+An endpoint (EP) represents a process or peripheral and is a standard interface. An EP can have one _backend_ depending on its type (e.g., I2C type can have /dev/i2c-0 and IPC can have Unix domain socket as its _backend_) and a process or peripheral writes data to the EP via the _backend_. The data will be transferred to the other EP to which the EP of the _backend_ is bound.
 
-                  EP                    EP
-             (For process)        (For peripheral)
-            +------------+         +------------+
-       +--->|            |<------->|            |<---+
-       |    +------------+  bound  +------------+    |
-       |                                             |
-       +---->'Backend'<-----+        'Backend'<------+
-              (socket)      |         (Device)  read/write
-                            |
-               process <----+
-                        read/write
+A process cannot send data directly to the peripheral types of EPs (GPIO, I2C, SPI, etc..). Instead, it can send data to IPC, INET, or LOOP EPs which can be bound to any EPs.
 
-###### _Backend_ supported by rteipc: _socket (Unix domain or Internet)_, _sysfs file_, _GPIO_, _TTY_, _I2C_, and _SPI_.
+The following figure shows how a process interacts with an I2C device using an IPC along with related APIs:
 
-## How to use rteipc ?
 
-This guide uses a docker container image, writes a simple program using rteipc, and sends data to an I2C device on the target from the remote host.
-To help set up endpoint configuration on the target device, we use _rtemgr_ (a command-line tool) in the below steps, but it's optional when you write a program that creates all endpoints needed on the target device.
+            rteipc_open()               rteipc_open()
+            +-----------+               +-----------+
+       +--->|  EP_IPC   |<------------->|  EP_I2C   |<---+
+       |    |           | rteipc_bind() |           |    |
+       |    +-----------+               +-----------+    |
+       |                                                 |
+       +--> [@unix_socket] <--+     +--> [/dev/i2c-0] <--+
+                              |     |
+            rteipc_connect()  |     +---------> I2C Device
+            rteipc_i2c_send() |
+            rteipc_setcb()    |
+                              |
+       Process <--------------+
+
+The below is the same example for interacting with an I2C device but using a LOOP:
+
+       +-----> Process
+       |
+       | rteipc_i2c_xfer()
+       | rteipc_xfer_setcb()
+       |
+       |    rteipc_open()               rteipc_open()
+       |    +-----------+               +-----------+
+       +--->|  EP_LOOP  |<------------->|  EP_I2C   |<---+
+            |           | rteipc_bind() |           |    |
+            +-----------+               +-----------+    |
+                                                         |
+                                    +--> [/dev/i2c-0] <--+
+                                    |
+                                    +---------> I2C Device
+
+The LOOP is the unique endpoint in that it has no _backend_; therefore, a process that sends data to a LOOP must be the same with the process which creates it or at least shares the memory region (i.e., threads). But this is useful when a process needs to interact with multiple EPs in its context, like as below:
+
+       +----> Process-A
+       |
+       |    +-----------+    +-----------+
+       +--->|  EP_LOOP  |<-->|  EP_IPC   |<---> [@unix_socket] <---> Process-B
+       |    +-----------+    +-----------+
+       |    +-----------+    +-----------+
+       +--->|  EP_LOOP  |<-->|  EP_INET  |<---> [0.0.0.0:9999] <---> Process-C (remote host)
+       |    +-----------+    +-----------+
+       |    +-----------+    +-----------+
+       +--->|  EP_LOOP  |<-->|  EP_I2C   |<---> [/dev/i2c-0] <---> I2C Device
+       |    +-----------+    +-----------+
+       |    +-----------+    +-----------+
+       +--->|  EP_LOOP  |<-->|  EP_GPIO  |<---> [/dev/gpiochip0] <---> GPIO_01
+            +-----------+    +-----------+
+
+## Example
+
+Let's say that we need to write a driver program for the device which has a GPIO interrupt line and an I2C interface as shown below, and need to check a register value of the device via the I2C interface whenever the GPIO line is asserted.
+
+       +----> Process                                  Physical Device
+       |                                              +---------------+
+       |    +-----------+    +-----------+  GPIO_01   |               |
+       +--->|  EP_LOOP  |<---|  EP_GPIO  |<========== |               |
+       |    +-----------+    +-----------+            |               |
+       |    +-----------+    +-----------+   I2C_1    |               |
+       +--->|  EP_LOOP  |<-->|  EP_I2C   |<=========> |               |
+            +-----------+    +-----------+            +---------------+
+
+Then the program would be like:
+
+    #include <stdio.h>
+    #include <stdint.h>
+    /* rteipc header */
+    #include <rteipc.h>
+
+    static void gpio_cb(const char *name, void *data, size_t len, void *arg)
+    {
+        uint8_t *hi = arg;
+        uint16_t addr = 0xaa;
+        uint8_t val[] = {0xbb};
+
+        /* GPIO pin high state? */
+        if (*hi) {
+            /* Read 1 byte from I2C address:0xaa, register:0xbb */
+            rteipc_i2c_xfer("i2c", addr, val, 1, 1);
+        }
+    }
+
+    static void i2c_cb(const char *name, void *data, size_t len, void *arg)
+    {
+        /* Print the register value */
+        printf("[ 0x%02x ]\n", *(uint8_t *)data);
+        /* Do something.. */
+    }
+
+    void main(void)
+    {
+        /* Initialize rteipc library */
+        rteipc_init(NULL);
+
+        /* Open LOOP and GPIO then bind, set callback */
+        rteipc_bind(
+            /* LOOP named 'my_gpio' */
+            rteipc_open("my_gpio"),
+            /* GPIO with chip:0, line:1 */
+            rteipc_open("gpio://gp1@/dev/gpiochip0-1,in")
+        );
+        rteipc_xfer_setcb("my_gpio", gpio_cb, NULL);
+
+        /* Open LOOP and I2C then bind, set callback */
+        rteipc_bind(
+            /* LOOP named 'my_i2c' */
+            rteipc_open("my_i2c"),
+            /* I2C with '/dev/i2c-1' as backend */
+            rteipc_open("i2c:///dev/i2c-1")
+        );
+        rteipc_xfer_setcb("my_i2c", i2c_cb, NULL);
+
+        /* Run eventloop */
+        rteipc_dispatch(NULL);
+    }
+
+There are several programs to provide how to use rteipc in the demo directory. To build demo, uncomment the following line in CMakeLists.txt:
+
+    # Uncomment if you want to build demo applications
+    #add_subdirectory(demo)
+
+## Using rtemgr tool
+
+rtemgr is a command-line tool to help set up endpoint configuration and write/read data to/from peripherals without writing a program, which might be helpful for development purposes.
+This guide uses a docker container image on the target device, creates an I2C endpoint, and sends data from the command line. Then, create INET endpoint and bind them to control it from a remote host machine.
 
 ##### Step 1 - Run the rtemgr container image on the target device
 ###### First, run the container image in privileged and host network mode to access all devices and networking on the target device.
@@ -88,55 +198,25 @@ To help set up endpoint configuration on the target device, we use _rtemgr_ (a c
     my-i2c           i2c    /dev/i2c-0                           my-inet
     my-inet          inet   0.0.0.0:9999                         my-i2c
 
-###### 3. Run a new container image on the host machine:
+###### 3. Write a program to connect to INET on the host machine:
 
     (on your host machine)
-    # docker run --rm -it raitosyo/rtemgr
-
-###### 4. Write a program, compile and run it on the container:
-
-    // i2c_test.c:
-    //   This sample program does the same thing as Step 3.
 
     #include <rteipc.h>
 
-    // Change TARGET_IP to your environment.
-    #define TARGET_IP   "192.168.0.1"
-
-    static void read_i2c(int ctx, void *data, size_t len, void *arg)
-    {
-        struct event_base *base = arg;
-        printf("[ 0x%02x ]\n", *(uint8_t *)data);
-        /* Exit eventloop */
-        event_base_loopbreak(base);
-    }
-
     void main(void)
     {
-        struct event_base *base = event_base_new();
-        uint16_t addr = 0xaa;
-        uint8_t tx_buf[] = {0xbb, 0xcc};
         int ctx;
-
-        /* Initialize rteipc with event_base */
-        rteipc_init(base);
+        ...
+        rteipc_init(NULL);
 
         /* Connect to the target device via INET endpoint */
-        ctx = rteipc_connect("inet://" TARGET_IP ":9999");
+        ctx = rteipc_connect("inet://192.168.0.100:9999");
 
-        /* write [0xbb, 0xcc] to address:0xaa */
-        rteipc_i2c_send(ctx, addr, tx_buf, sizeof(tx_buf), 0);
-        /* request 1 byte from address:0xaa, register:0xbb */
-        rteipc_i2c_send(ctx, addr, tx_buf, 1, 1);
-        rteipc_setcb(ctx, read_i2c, NULL, base, 0);
-
-        /* Run eventloop */
+        /* Send data to I2C on the target device */
+        rteipc_i2c_send(ctx, ...);
         rteipc_dispatch(NULL);
     }
-
-    (To compile it and run)
-    # gcc i2c_test.c -o i2c_test $(pkg-config --cflags --libs rteipc libevent)
-    # ./i2c_test
 
 ### API
 
@@ -157,6 +237,7 @@ rteipc_open() creates endpoints for backends supported. The return value is an e
       "tty:///dev/ttyS0,115200"                       (/dev/ttyS0 setting speed to 115200 baud)
       "i2c:///dev/i2c-0"                              (I2C-0 device)
       "spi:///dev/spidev0.0,5000,3"                   (/dev/spidev0.0 setting max speed to 5kHz and SPI mode to 3)
+      "loop"                                          (Loopback endpoint named as 'loop', without backend)
 
 ##### int rteipc_bind(int ep_a, int ep_b)
 
@@ -166,10 +247,18 @@ rteipc_bind() connects two endpoints together. The return value is zero on succe
 
 rteipc_unbind() removes connection from two endpoints. The return value is zero on success, otherwise -1. The argument _ep_ is an endpoint descriptor bound.
 
+##### void rteipc_dispatch(struct timeval *tv)
+
+rteipc_dispatch() runs event dispatching loop. If the argument _tv_ is specified, exit the event loop after the specified time.
+
 ##### int rteipc_connect(const char *uri)
 
 rteipc_connect() is used for a process to connect to an IPC or INET endpoint. The endpoint specified by the _uri_ must be created before this function call. The return value is a context descriptor on success, otherwise -1. The argument _uri_ is an endpoint pathname (see above).
-A process can read from and write to only IPC or INET endpoint. The data stored by the process in the endpoint will be available in the other endpoint to which it is bound, and vice versa.
+A process can read from and write to IPC and INET endpoint. The data stored by the process in the endpoint will be available in the other endpoint to which it is bound, and vice versa.
+
+##### int rteipc_setcb(int ctx, rteipc_read_cb read_cb, rteipc_err_cb err_cb, void *arg, short flag)
+
+rteipc_setcb() changes read/error callbacks. The argument _arg_ can be used to pass data to the callbacks and _flag_ is a bitmask of flags. The argument _frag_ is not used for now.
 
 ##### int rteipc_send(int ctx, const void *buf, size_t len)
 
@@ -189,19 +278,24 @@ rteipc_i2c_send() should be used to transmit data when the other end is I2C endp
 
 ##### int rteipc_sysfs_send(int ctx, const char *attr, const char *value)
 
-rteipc_sysfs_send() should be used to transmit data when the other end is SYSFS endpoint. This sends data in a format specific to SYSFS. The argument _ctx_ is the same as rtipc_send(). The argument _attr_ is the name of an attribute and _value_ is the new value of the attribute.
+rteipc_sysfs_send() should be used to transmit data when the other end is SYSFS endpoint. This sends data in a format specific to SYSFS. The argument _ctx_ is the same as rtipc_send(). The argument _attr_ is the name of an attribute and _value_ is the new value of the attribute. If _value_ is NULL, read the current value of the attribute.
 
-##### int rteipc_setcb(int ctx, rteipc_read_cb read_cb, rteipc_err_cb err_cb, void *arg, short flag)
+##### int rteipc_xfer(const char *name, const void *buf, size_t len)
 
-rteipc_setcb() changes read/error callbacks. The argument _arg_ can be used to pass data to the callbacks and _flag_ is a bitmask of flags. The argument _frag_ is not used for now.
+rteipc_xfer() is equivalent to rteipc_send() but is a function dedicated for sending data to the LOOP endpoint. The argument _name_ is the name of the LOOP endpoint specified when calling rteipc_open().
 
-##### void rteipc_dispatch(struct timeval *tv)
+##### int rteipc_gpio_xfer(const char *name, uint8_t value)
 
-rteipc_dispatch() runs event dispatching loop. If the argument _tv_ is specified, exit the event loop after the specified time.
+rteipc_gpio_xfer() is equivalent to rteipc_gpio_send() but is a function dedicated for sending data to the LOOP endpoint. The argument _name_ is the name of the LOOP endpoint specified when calling rteipc_open().
 
-## Example
+##### int rteipc_spi_xfer(const char *name, const uint8_t *tx_buf, uint16_t len, bool rdmode)
 
-There are several programs to provide how to use rteipc in the demo directory. To build demo, uncomment the following line in CMakeLists.txt:
+rteipc_spi_xfer() is equivalent to rteipc_spi_send() but is a function dedicated for sending data to the LOOP endpoint. The argument _name_ is the name of the LOOP endpoint specified when calling rteipc_open().
 
-    # Uncomment if you want to build demo applications
-    #add_subdirectory(demo)
+##### int rteipc_i2c_xfer(const char *name, uint16_t addr, const uint8_t *tx_buf, uint16_t wlen, uint16_t rlen)
+
+rteipc_i2c_xfer() is equivalent to rteipc_i2c_send() but is a function dedicated for sending data to the LOOP endpoint. The argument _name_ is the name of the LOOP endpoint specified when calling rteipc_open().
+
+##### int rteipc_sysfs_xfer(const char *name, const char *attr, const char *value)
+
+rteipc_sysfs_xfer() is equivalent to rteipc_sysfs_send() but is a function dedicated for sending data to the LOOP endpoint. The argument _name_ is the name of the LOOP endpoint specified when calling rteipc_open().
