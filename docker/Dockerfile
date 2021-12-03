@@ -6,17 +6,11 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
             bash \
             bash-completion \
-            cmake \
-            g++ \
-            gcc \
             libb64-dev \
             libevent-dev \
             libgpiod-dev \
             libudev-dev \
             libyaml-dev \
-            make \
-            pkg-config \
-            vim \
     ; \
     rm -rf /var/lib/apt/lists/*
 
@@ -26,6 +20,11 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
             ca-certificates \
+            cmake \
+            g++ \
+            gcc \
+            make \
+            pkg-config \
             wget \
     ; \
     rm -rf /var/lib/apt/lists/*; \
