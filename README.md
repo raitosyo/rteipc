@@ -102,7 +102,7 @@ Then the program would be like:
         /* GPIO pin high state? */
         if (*hi) {
             /* Read 1 byte from I2C address:0xaa, register:0xbb */
-            rteipc_i2c_xfer("i2c", addr, val, 1, 1);
+            rteipc_i2c_xfer("my_i2c", addr, val, 1, 1);
         }
     }
 
