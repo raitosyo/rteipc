@@ -80,10 +80,10 @@ Let's say that we need to write a driver program for the device which has a GPIO
        +----> Process                                  Physical Device
        |                                              +---------------+
        |    +-----------+    +-----------+  GPIO_01   |               |
-       +--->|  EP_LOOP  |<---|  EP_GPIO  |<========== |               |
+       +--->|  EP_LOOP  |<-->|  EP_GPIO  |============|               |
        |    +-----------+    +-----------+            |               |
        |    +-----------+    +-----------+   I2C_1    |               |
-       +--->|  EP_LOOP  |<-->|  EP_I2C   |<=========> |               |
+       +--->|  EP_LOOP  |<-->|  EP_I2C   |============|               |
             +-----------+    +-----------+            +---------------+
 
 Then the program would be like:
