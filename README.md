@@ -95,7 +95,7 @@ Then the program would be like:
 
     static void gpio_cb(const char *name, void *data, size_t len, void *arg)
     {
-        uint8_t *hi = arg;
+        uint8_t *hi = data;
         uint16_t addr = 0xaa;
         uint8_t val[] = {0xbb};
 
