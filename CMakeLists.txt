@@ -41,7 +41,9 @@ install (
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 
 add_subdirectory(src)
-add_subdirectory(src/rtemgr)
+
+# Uncomment if you want to build rtemgr
+#add_subdirectory(src/rtemgr)
 
 # Uncomment if you want to build demo applications
 #add_subdirectory(demo)

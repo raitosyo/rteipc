@@ -37,7 +37,8 @@ RUN set -eux; \
     tar -xf rteipc.tar.gz -C src --strip-components=1; \
     rm rteipc.tar.gz; \
     cd src; \
-    # build demo
+    # build rtemgr and demo
+    sed -i '/^#add_subdirectory(src\/rtemgr)/s/^#//' CMakeLists.txt; \
     sed -i '/^#add_subdirectory(demo)/s/^#//' CMakeLists.txt; \
     mkdir build && cd build; \
     cmake .. && cmake --build .; \
