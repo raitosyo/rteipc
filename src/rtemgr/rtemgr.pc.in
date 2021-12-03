@@ -6,6 +6,6 @@ libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 Name: @PROJECT_NAME@
 Description: @PACKAGE_DESCRIPTION@
 Version: @PACKAGE_VERSION@
-Requires.private: rteipc >= 0.2.1
+Requires.private: rteipc >= 0.2.2
 Libs: -L${libdir} -l@PROJECT_NAME@
 Cflags: -I${includedir}

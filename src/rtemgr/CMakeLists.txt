@@ -3,7 +3,7 @@
 #
 
 project(rtemgr)
-set(PACKAGE_VERSION 0.0.1)
+set(PACKAGE_VERSION 0.0.2)
 
 set(RTEMGR_INCLUDES
     rtemgr-common.h
