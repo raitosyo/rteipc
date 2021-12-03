@@ -31,7 +31,7 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*; \
     \
     uri=https://github.com/raitosyo/rteipc/archive/refs/tags/; \
-    file=v0.2.1.tar.gz; \
+    file=v0.2.2.tar.gz; \
     wget -O rteipc.tar.gz $uri$file; \
     mkdir src; \
     tar -xf rteipc.tar.gz -C src --strip-components=1; \
